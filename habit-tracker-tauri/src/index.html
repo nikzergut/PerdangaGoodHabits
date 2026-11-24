@@ -12,24 +12,25 @@
       <header class="masthead">
         <div class="masthead-main">
           <p class="kicker">
-            дневник дисциплины
-            <span id="mode-badge" class="mode-badge hidden">веб</span>
+            <span data-i18n="kicker">дневник дисциплины</span>
+            <span id="mode-badge" class="mode-badge hidden" data-i18n="webBadge">веб</span>
           </p>
-          <h1 class="title">Привычки</h1>
+          <h1 class="title" data-i18n="title">Привычки</h1>
         </div>
         <div class="masthead-side">
-          <p class="range-note" id="range-note">14 дней в окне</p>
+          <p class="range-note" id="range-note" data-i18n="rangeDefault">14 дней в окне</p>
           <div class="range-controls" aria-label="Навигация по датам">
-            <button id="prev-range" class="control-btn" type="button">Назад</button>
-            <button id="today-range" class="control-btn control-btn--solid" type="button">Сегодня</button>
-            <button id="next-range" class="control-btn" type="button">Вперёд</button>
+            <button id="prev-range" class="control-btn" type="button" data-i18n="navPrev">Назад</button>
+            <button id="today-range" class="control-btn control-btn--solid" type="button" data-i18n="navToday">Сегодня</button>
+            <button id="next-range" class="control-btn" type="button" data-i18n="navNext">Вперёд</button>
             <div class="calendar-picker">
               <button
                 id="calendar-btn"
                 class="control-btn control-btn--icon"
                 type="button"
-                aria-label="Открыть календарь"
+                data-i18n-aria="calendarAria"
                 aria-controls="date-picker"
+                data-i18n-title="calendarTitle"
                 title="Выбрать дату"
               >
                 <svg class="calendar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -44,6 +45,7 @@
                 min="1900-01-01"
                 max="2100-12-31"
                 tabindex="-1"
+                data-i18n-aria="dateAria"
                 aria-label="Выбрать дату"
               />
             </div>
@@ -53,21 +55,58 @@
 
       <section class="composer" aria-label="Добавить привычку">
         <form id="add-form" class="composer-form">
-          <label class="composer-label" for="habit-name">Новая привычка</label>
+          <label class="composer-label" for="habit-name" data-i18n="composerLabel">Новая привычка</label>
           <div class="composer-row">
             <input
               id="habit-name"
               class="composer-input"
               type="text"
               maxlength="80"
+              data-i18n-placeholder="composerPlaceholder"
               placeholder="читать, бегать, писать..."
               autocomplete="off"
             />
-            <button type="submit" class="control-btn control-btn--solid control-btn--add">Добавить</button>
+            <button type="submit" class="control-btn control-btn--solid control-btn--add" data-i18n="addBtn">Добавить</button>
           </div>
         </form>
         <p id="status" class="status" aria-live="polite"></p>
       </section>
+
+      <section class="toolbar" aria-label="Работа с привычками">
+        <div class="toolbar-group">
+          <label class="toolbar-label" for="habit-search" data-i18n="searchLabel">Поиск привычек</label>
+          <div class="toolbar-search">
+            <input
+              id="habit-search"
+              class="toolbar-input"
+              type="search"
+              data-i18n-placeholder="searchPlaceholder"
+              placeholder="найти по названию..."
+              autocomplete="off"
+            />
+            <button
+              id="clear-search"
+              class="toolbar-search-clear"
+              type="button"
+              data-i18n-aria="clearSearch"
+              data-i18n-title="clearSearch"
+              aria-label="Очистить поиск"
+              title="Очистить поиск"
+            >×</button>
+          </div>
+        </div>
+        <div class="toolbar-group toolbar-group--actions">
+          <button id="history-btn" class="control-btn" type="button" data-i18n="historyBtn">История</button>
+          <button id="stats-btn" class="control-btn" type="button" data-i18n="statsBtn">Статистика</button>
+          <button id="data-btn" class="control-btn" type="button" data-i18n="dataBtn">Данные</button>
+          <button id="settings-btn" class="control-btn" type="button" data-i18n="settingsBtn">Настройки</button>
+        </div>
+      </section>
+
+      <div id="undo-bar" class="undo-bar hidden" role="status">
+        <span id="undo-text"></span>
+        <button id="undo-btn" class="control-btn" type="button" data-i18n="undoAction">Отменить</button>
+      </div>
 
       <section class="board-wrap" aria-label="Таблица привычек">
         <div class="board-scroll">
@@ -75,7 +114,7 @@
             <thead>
               <tr id="days-row">
                 <th class="habit-col sticky-col">
-                  <div class="head-cell head-cell--habit">Привычка</div>
+                  <div class="head-cell head-cell--habit" data-i18n="habitColumn">Привычка</div>
                 </th>
               </tr>
             </thead>
@@ -83,15 +122,91 @@
           </table>
         </div>
         <div id="empty-state" class="empty-state hidden">
-          <p class="empty-title">Пока пусто</p>
-          <p class="empty-copy">Добавь привычку выше. Таблица заполнится днями и чекбоксами.</p>
+          <p class="empty-title" data-i18n="emptyTitle">Пока пусто</p>
+          <p class="empty-copy" data-i18n="emptyCopy">Добавь привычку выше. Таблица заполнится днями и чекбоксами.</p>
         </div>
       </section>
 
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Переключить тему" title="Переключить тему" data-no-busy="true">
+      <button id="theme-toggle" class="theme-toggle" type="button" data-i18n-aria="themeLightAria" aria-label="Тёмная тема" title="Переключить тему" data-no-busy="true">
         <span class="theme-toggle-icon" aria-hidden="true">◐</span>
         <span class="theme-toggle-text">Тема</span>
       </button>
+
+      <dialog id="history-dialog" class="panel-dialog">
+        <div class="panel-head">
+          <h2 data-i18n="historyTitle">Полная история</h2>
+          <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
+        </div>
+        <p id="history-summary" class="panel-summary"></p>
+        <div id="history-content" class="panel-content"></div>
+      </dialog>
+
+      <dialog id="stats-dialog" class="panel-dialog">
+        <div class="panel-head">
+          <h2 data-i18n="statsTitle">Статистика</h2>
+          <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
+        </div>
+        <div id="stats-content" class="panel-content"></div>
+      </dialog>
+
+      <dialog id="data-dialog" class="panel-dialog">
+        <div class="panel-head">
+          <h2 data-i18n="dataTitle">Данные</h2>
+          <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
+        </div>
+        <p id="data-status" class="status" aria-live="polite"></p>
+        <div class="panel-field">
+          <label for="data-text" data-i18n="dataTextLabel">Данные JSON</label>
+          <textarea id="data-text" class="data-textarea" rows="10" spellcheck="false" data-no-busy="true"></textarea>
+        </div>
+        <div class="button-row">
+          <button id="data-export" class="control-btn" type="button" data-i18n="dataExport">Экспорт</button>
+          <button id="data-copy" class="control-btn" type="button" data-i18n="dataCopy">Копировать</button>
+          <button id="data-download" class="control-btn" type="button" data-i18n="dataDownload">Скачать</button>
+          <button id="data-backup" class="control-btn" type="button" data-i18n="dataBackup">Бэкап</button>
+        </div>
+        <div class="panel-field">
+          <label for="data-file" data-i18n="dataFileLabel">Загрузить файл JSON</label>
+          <input id="data-file" class="data-file" type="file" accept=".json,application/json" data-no-busy="true" />
+        </div>
+        <div class="button-row">
+          <button id="data-import" class="control-btn control-btn--solid" type="button" data-i18n="dataImport">Импорт (заменить данные)</button>
+        </div>
+      </dialog>
+
+      <dialog id="settings-dialog" class="panel-dialog">
+        <div class="panel-head">
+          <h2 data-i18n="settingsTitle">Настройки</h2>
+          <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
+        </div>
+        <div class="panel-field">
+          <label for="setting-language" data-i18n="settingsLanguage">Язык</label>
+          <select id="setting-language" data-no-busy="true">
+            <option value="ru" data-i18n="langRu">Русский</option>
+            <option value="en" data-i18n="langEn">English</option>
+          </select>
+        </div>
+        <div class="panel-field">
+          <label for="setting-week-start" data-i18n="settingsWeekStart">Первый день недели</label>
+          <select id="setting-week-start" data-no-busy="true">
+            <option value="monday" data-i18n="weekMonday">Понедельник</option>
+            <option value="sunday" data-i18n="weekSunday">Воскресенье</option>
+          </select>
+        </div>
+        <div class="panel-field" id="setting-window-field">
+          <label for="setting-window-size" data-i18n="settingsWindowSize">Размер окна</label>
+          <select id="setting-window-size" data-no-busy="true">
+            <option value="compact" data-i18n="sizeCompact">Компактный</option>
+            <option value="standard" data-i18n="sizeStandard">Стандартный</option>
+            <option value="wide" data-i18n="sizeWide">Широкий</option>
+          </select>
+          <p id="settings-web-note" class="panel-note hidden" data-i18n="sizeWebNote">Размер окна доступен только в десктопной версии.</p>
+        </div>
+        <div class="button-row">
+          <button id="settings-save" class="control-btn control-btn--solid" type="button" data-i18n="settingsSave">Сохранить</button>
+          <button class="control-btn" type="button" data-close-dialog data-no-busy="true" data-i18n="settingsCancel">Отмена</button>
+        </div>
+      </dialog>
     </div>
   </body>
 </html>

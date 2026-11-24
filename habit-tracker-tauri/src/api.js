@@ -170,9 +170,46 @@ function boardFromStore(store, anchor, days) {
     habits: store.habits.map((habit) => ({
       id: habit.id,
       name: habit.name,
+      createdAt: habit.createdAt,
       completions: habit.completions.filter((date) => visible.has(date)),
     })),
   };
+}
+
+function historyFromStore(store) {
+  const habits = store.habits
+    .map((habit) => ({
+      id: habit.id,
+      name: habit.name,
+      createdAt: habit.createdAt,
+      completions: [...new Set(habit.completions)].sort(),
+    }))
+    .sort((a, b) => a.id - b.id);
+  const allDates = [...new Set(habits.flatMap((h) => h.completions))].sort();
+
+  return {
+    habits,
+    totalCompletions: habits.reduce((sum, h) => sum + h.completions.length, 0),
+    firstDate: allDates[0] ?? null,
+    lastDate: allDates[allDates.length - 1] ?? null,
+  };
+}
+
+function validateStoreData(store) {
+  const names = new Set();
+  for (const habit of store.habits) {
+    const name = String(habit.name ?? "").trim();
+    validateName(name);
+    const lowered = name.toLowerCase();
+    if (names.has(lowered)) {
+      throw new Error(`Привычка "${name}" уже существует`);
+    }
+    names.add(lowered);
+    parseDate(String(habit.createdAt ?? "").trim());
+    for (const date of habit.completions) {
+      parseDate(String(date).trim());
+    }
+  }
 }
 
 function validateName(name) {
@@ -191,6 +228,71 @@ async function webInvoke(command, args = {}) {
     case "get_board": {
       const anchor = resolveAnchor(args.anchor);
       return boardFromStore(loadStore(), anchor, args.days ?? DEFAULT_DAYS);
+    }
+
+    case "get_history": {
+      return historyFromStore(loadStore());
+    }
+
+    case "export_data": {
+      return JSON.stringify(loadStore(), null, 2);
+    }
+
+    case "import_data": {
+      const anchor = resolveAnchor(args.anchor);
+      const parsed = normalizeStore(JSON.parse(String(args.json ?? "").trim()));
+      validateStoreData(parsed);
+      const store = normalizeStore(parsed);
+      try {
+        localStorage.setItem("habit-tracker-store-backup", localStorage.getItem(STORAGE_KEY) ?? "");
+      } catch (_) {
+        // Backup is best effort in restricted environments.
+      }
+      saveStore(store);
+      return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
+    }
+
+    case "backup_data": {
+      const raw = localStorage.getItem(STORAGE_KEY) ?? "";
+      try {
+        localStorage.setItem("habit-tracker-store-backup", raw);
+      } catch (_) {
+        // Ignore storage errors.
+      }
+      return "habit-tracker-store-backup";
+    }
+
+    case "restore_habit": {
+      const anchor = resolveAnchor(args.anchor);
+      const store = loadStore();
+      const raw = args.habit ?? {};
+      const name = String(raw.name ?? "").trim();
+      validateName(name);
+      const completions = [...new Set((raw.completions ?? []).map((d) => parseDate(String(d).trim())))].sort();
+
+      if (store.habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) {
+        throw new Error(`Привычка "${name}" уже существует`);
+      }
+
+      let id = Number(raw.id);
+      if (!Number.isInteger(id) || id < 1 || store.habits.some((h) => h.id === id)) {
+        id = store.nextId;
+      }
+      store.habits.push({
+        id,
+        name,
+        createdAt: parseDate(String(raw.createdAt ?? todayISO()).trim()),
+        completions,
+      });
+      store.habits.sort((a, b) => a.id - b.id);
+      store.nextId = Math.max(store.nextId, id + 1);
+      saveStore(store);
+
+      return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
+    }
+
+    case "set_window_size": {
+      throw new Error("Размер окна доступен только в десктопной версии");
     }
 
     case "add_habit": {

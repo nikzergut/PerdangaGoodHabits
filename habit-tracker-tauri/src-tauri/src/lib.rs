@@ -26,10 +26,13 @@ struct Habit {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
 struct Store {
     #[serde(default)]
     version: u32,
+    #[serde(default, alias = "next_id")]
     next_id: u32,
+    #[serde(default)]
     habits: Vec<Habit>,
 }
 
@@ -52,6 +55,7 @@ struct DayCell {
 struct HabitView {
     id: u32,
     name: String,
+    created_at: String,
     completions: Vec<String>,
 }
 
@@ -69,6 +73,24 @@ struct ToggleResponse {
     habit_id: u32,
     date: String,
     completed: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryHabit {
+    id: u32,
+    name: String,
+    created_at: String,
+    completions: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryResponse {
+    habits: Vec<HistoryHabit>,
+    total_completions: usize,
+    first_date: Option<String>,
+    last_date: Option<String>,
 }
 
 fn detailed_error(user_message: &str, detail: impl std::fmt::Display) -> String {
@@ -365,6 +387,117 @@ fn toggle_day_in_store(store: &Store, habit_id: u32, date: &str) -> Result<(Stor
     Ok((next, completed))
 }
 
+fn validate_store_data(store: &Store) -> Result<(), String> {
+    let mut names = HashSet::new();
+    for habit in &store.habits {
+        let name = habit.name.trim();
+        validate_name(name)?;
+        if !names.insert(name.to_lowercase()) {
+            return Err(format!("Привычка \"{name}\" уже существует"));
+        }
+        validate_date(parse_date(habit.created_at.trim())?)?;
+        for date in &habit.completions {
+            validate_date(parse_date(date.trim())?)?;
+        }
+    }
+    Ok(())
+}
+
+fn history_from_store(store: &Store) -> HistoryResponse {
+    let mut habits: Vec<HistoryHabit> = store
+        .habits
+        .iter()
+        .map(|h| HistoryHabit {
+            id: h.id,
+            name: h.name.clone(),
+            created_at: h.created_at.clone(),
+            completions: {
+                let mut dates = h.completions.clone();
+                dates.sort();
+                dates.dedup();
+                dates
+            },
+        })
+        .collect();
+    habits.sort_by_key(|h| h.id);
+
+    let mut all_dates: Vec<String> = habits
+        .iter()
+        .flat_map(|h| h.completions.iter().cloned())
+        .collect();
+    all_dates.sort();
+    all_dates.dedup();
+
+    HistoryResponse {
+        total_completions: habits.iter().map(|h| h.completions.len()).sum(),
+        first_date: all_dates.first().cloned(),
+        last_date: all_dates.last().cloned(),
+        habits,
+    }
+}
+
+fn restore_habit_in_store(store: &Store, habit: &Habit) -> Result<Store, String> {
+    let name = habit.name.trim();
+    validate_name(name)?;
+    validate_date(parse_date(habit.created_at.trim())?)?;
+    for date in &habit.completions {
+        validate_date(parse_date(date.trim())?)?;
+    }
+
+    let mut next = store.clone();
+    if next
+        .habits
+        .iter()
+        .any(|h| h.name.to_lowercase() == name.to_lowercase())
+    {
+        return Err(format!("Привычка \"{name}\" уже существует"));
+    }
+
+    let mut restored = habit.clone();
+    restored.name = name.to_string();
+    restored.completions.sort();
+    restored.completions.dedup();
+
+    if next.habits.iter().any(|h| h.id == restored.id) {
+        restored.id = next.next_id;
+    }
+    next.next_id = restored
+        .id
+        .checked_add(1)
+        .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?
+        .max(next.next_id);
+    next.habits.push(restored);
+    next.habits.sort_by_key(|h| h.id);
+    Ok(next)
+}
+
+fn write_backup(path: &PathBuf, store: &Store) -> Result<String, String> {
+    let bak = backup_path(path);
+    let label = bak
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| DATA_FILE.to_string());
+
+    if path.exists() {
+        fs::copy(path, &bak).map_err(|e| {
+            detailed_error(
+                "Не удалось создать бэкап данных",
+                format!("{}: {e}", bak.display()),
+            )
+        })?;
+    } else {
+        let content = serde_json::to_string_pretty(store)
+            .map_err(|e| detailed_error("Не удалось сериализовать данные", e))?;
+        fs::write(&bak, content).map_err(|e| {
+            detailed_error(
+                "Не удалось создать бэкап данных",
+                format!("{}: {e}", bak.display()),
+            )
+        })?;
+    }
+    Ok(label)
+}
+
 fn today_naive() -> NaiveDate {
     Local::now().date_naive()
 }
@@ -446,6 +579,7 @@ fn board_from_store(store: &Store, anchor: NaiveDate, days: i64) -> Result<Board
             .map(|h| HabitView {
                 id: h.id,
                 name: h.name.clone(),
+                created_at: h.created_at.clone(),
                 completions: h
                     .completions
                     .iter()
@@ -565,6 +699,87 @@ fn toggle_day(
     })
 }
 
+#[tauri::command]
+fn get_history(state: tauri::State<'_, AppState>) -> Result<HistoryResponse, String> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    Ok(history_from_store(&store))
+}
+
+#[tauri::command]
+fn export_data(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    serde_json::to_string_pretty(&*store)
+        .map_err(|e| detailed_error("Не удалось экспортировать данные", e))
+}
+
+#[tauri::command]
+fn import_data(
+    state: tauri::State<'_, AppState>,
+    json: String,
+    anchor: Option<String>,
+    days: Option<i64>,
+) -> Result<BoardResponse, String> {
+    let anchor_date = resolve_anchor(anchor)?;
+    let parsed: Store = serde_json::from_str(json.trim())
+        .map_err(|e| detailed_error("Не удалось разобрать импортируемые данные", e))?;
+    validate_store_data(&parsed)?;
+    let next = normalize_store(parsed)?;
+
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    let _ = write_backup(&state.path, &store);
+    save_store_to_path(&state.path, &next)?;
+    *store = next;
+
+    board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
+}
+
+#[tauri::command]
+fn backup_data(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    write_backup(&state.path, &store)
+}
+
+#[tauri::command]
+fn restore_habit(
+    state: tauri::State<'_, AppState>,
+    habit: Habit,
+    anchor: Option<String>,
+    days: Option<i64>,
+) -> Result<BoardResponse, String> {
+    let anchor_date = resolve_anchor(anchor)?;
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    let next = restore_habit_in_store(&store, &habit)?;
+    save_store_to_path(&state.path, &next)?;
+    *store = next;
+
+    board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
+}
+
+#[tauri::command]
+fn set_window_size(app: tauri::AppHandle, width: u32, height: u32) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Окно приложения не найдено".to_string())?;
+    window
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+        .map_err(|e| detailed_error("Не удалось изменить размер окна", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -591,10 +806,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_board,
+            get_history,
             add_habit,
             rename_habit,
             delete_habit,
-            toggle_day
+            toggle_day,
+            export_data,
+            import_data,
+            backup_data,
+            restore_habit,
+            set_window_size
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -869,6 +1090,98 @@ mod tests {
         assert_eq!(store.habits.len(), 1);
         assert!(path.exists());
         assert!(!tmp.exists());
+
+        cleanup_test_files(&path);
+    }
+
+    #[test]
+    fn store_uses_camel_case_and_reads_legacy_next_id() {
+        let serialized = serde_json::to_string(&sample_store()).unwrap();
+        assert!(serialized.contains("\"nextId\""));
+        assert!(serialized.contains("\"createdAt\""));
+
+        let legacy = r#"{"version":1,"next_id":5,"habits":[]}"#;
+        let store: Store = serde_json::from_str(legacy).unwrap();
+        assert_eq!(store.next_id, 5);
+    }
+
+    #[test]
+    fn history_from_store_reports_full_timeline() {
+        let mut store = sample_store();
+        store.habits[0].completions = vec![
+            "2026-11-25".to_string(),
+            "2026-11-01".to_string(),
+            "2026-11-01".to_string(),
+        ];
+
+        let history = history_from_store(&store);
+        assert_eq!(history.total_completions, 2);
+        assert_eq!(
+            history.habits[0].completions,
+            vec!["2026-11-01", "2026-11-25"]
+        );
+        assert_eq!(history.first_date.as_deref(), Some("2026-11-01"));
+        assert_eq!(history.last_date.as_deref(), Some("2026-11-25"));
+    }
+
+    #[test]
+    fn validate_store_data_rejects_invalid_import() {
+        let mut store = sample_store();
+        store.habits[0].name = String::new();
+        assert!(validate_store_data(&store).is_err());
+
+        let mut store = sample_store();
+        store.habits[0].completions.push("9999-01-01".to_string());
+        assert!(validate_store_data(&store).is_err());
+
+        let mut store = sample_store();
+        store.habits.push(store.habits[0].clone());
+        assert!(validate_store_data(&store).is_err());
+    }
+
+    #[test]
+    fn restore_habit_in_store_preserves_history() {
+        let mut store = sample_store();
+        store.habits.clear();
+        let deleted = Habit {
+            id: 1,
+            name: "Чтение".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: vec!["2026-11-02".to_string()],
+        };
+
+        let restored = restore_habit_in_store(&store, &deleted).unwrap();
+        assert_eq!(restored.habits.len(), 1);
+        assert_eq!(restored.habits[0].completions, deleted.completions);
+        assert_eq!(restored.next_id, 2);
+    }
+
+    #[test]
+    fn restore_habit_in_store_reassigns_colliding_id() {
+        let mut store = sample_store();
+        store.habits[0].name = "Бег".to_string();
+        let deleted = Habit {
+            id: 1,
+            name: "Чтение".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: Vec::new(),
+        };
+
+        let restored = restore_habit_in_store(&store, &deleted).unwrap();
+        assert_eq!(restored.habits.len(), 2);
+        assert_eq!(restored.habits[1].id, 2);
+        assert_eq!(restored.next_id, 3);
+    }
+
+    #[test]
+    fn write_backup_creates_named_file() {
+        let path = test_path();
+        save_store_to_path(&path, &sample_store()).unwrap();
+
+        let label = write_backup(&path, &sample_store()).unwrap();
+        assert!(label.ends_with(".bak"));
+        assert!(!label.contains(std::path::MAIN_SEPARATOR));
+        assert!(backup_path(&path).exists());
 
         cleanup_test_files(&path);
     }
