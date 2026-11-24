@@ -274,8 +274,7 @@ fn save_store_to_path(path: &PathBuf, store: &Store) -> Result<(), String> {
     })
 }
 
-fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
-    let name = name.trim();
+fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Название привычки не может быть пустым".into());
     }
@@ -284,13 +283,24 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
             "Название привычки не может быть длиннее {MAX_NAME_LEN} символов"
         ));
     }
+    Ok(())
+}
+
+fn ensure_name_available(store: &Store, name: &str, except_id: Option<u32>) -> Result<(), String> {
     if store
         .habits
         .iter()
-        .any(|h| h.name.to_lowercase() == name.to_lowercase())
+        .any(|h| Some(h.id) != except_id && h.name.to_lowercase() == name.to_lowercase())
     {
         return Err(format!("Привычка \"{name}\" уже существует"));
     }
+    Ok(())
+}
+
+fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
+    let name = name.trim();
+    validate_name(name)?;
+    ensure_name_available(store, name, None)?;
 
     let mut next = store.clone();
     next.habits.push(Habit {
@@ -303,6 +313,24 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
         .next_id
         .checked_add(1)
         .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?;
+    Ok(next)
+}
+
+fn rename_habit_in_store(store: &Store, id: u32, name: &str) -> Result<Store, String> {
+    let name = name.trim();
+    validate_name(name)?;
+    if !store.habits.iter().any(|h| h.id == id) {
+        return Err(format!("Привычка с id {id} не найдена"));
+    }
+    ensure_name_available(store, name, Some(id))?;
+
+    let mut next = store.clone();
+    let habit = next
+        .habits
+        .iter_mut()
+        .find(|h| h.id == id)
+        .expect("id checked above");
+    habit.name = name.to_string();
     Ok(next)
 }
 
@@ -471,6 +499,26 @@ fn add_habit(
 }
 
 #[tauri::command]
+fn rename_habit(
+    state: tauri::State<'_, AppState>,
+    id: u32,
+    name: String,
+    anchor: Option<String>,
+    days: Option<i64>,
+) -> Result<BoardResponse, String> {
+    let anchor_date = resolve_anchor(anchor)?;
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    let next = rename_habit_in_store(&store, id, &name)?;
+    save_store_to_path(&state.path, &next)?;
+    *store = next;
+
+    board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
+}
+
+#[tauri::command]
 fn delete_habit(
     state: tauri::State<'_, AppState>,
     id: u32,
@@ -544,6 +592,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_board,
             add_habit,
+            rename_habit,
             delete_habit,
             toggle_day
         ])
@@ -642,6 +691,38 @@ mod tests {
         assert_eq!(next.habits.len(), 2);
         assert_eq!(next.next_id, 3);
         assert_eq!(next.habits[1].name, "Бег");
+    }
+
+    #[test]
+    fn rename_habit_in_store_preserves_history() {
+        let mut store = sample_store();
+        store.habits[0].completions.push("2026-11-25".to_string());
+
+        let next = rename_habit_in_store(&store, 1, "  Бег  ").unwrap();
+
+        assert_eq!(store.habits[0].name, "Чтение");
+        assert_eq!(next.habits[0].name, "Бег");
+        assert_eq!(next.habits[0].completions, vec!["2026-11-25".to_string()]);
+        assert_eq!(next.next_id, store.next_id);
+    }
+
+    #[test]
+    fn rename_habit_in_store_rejects_duplicate() {
+        let mut store = sample_store();
+        store.habits.push(Habit {
+            id: 2,
+            name: "Бег".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: Vec::new(),
+        });
+
+        assert!(rename_habit_in_store(&store, 1, "бег").is_err());
+    }
+
+    #[test]
+    fn rename_habit_in_store_rejects_missing_id() {
+        let store = sample_store();
+        assert!(rename_habit_in_store(&store, 99, "Бег").is_err());
     }
 
     #[test]

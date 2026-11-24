@@ -175,6 +175,17 @@ function boardFromStore(store, anchor, days) {
   };
 }
 
+function validateName(name) {
+  if (!name) {
+    throw new Error("Название привычки не может быть пустым");
+  }
+  if ([...name].length > MAX_NAME_LEN) {
+    throw new Error(
+      `Название привычки не может быть длиннее ${MAX_NAME_LEN} символов`,
+    );
+  }
+}
+
 async function webInvoke(command, args = {}) {
   switch (command) {
     case "get_board": {
@@ -184,14 +195,7 @@ async function webInvoke(command, args = {}) {
 
     case "add_habit": {
       const name = String(args.name ?? "").trim();
-      if (!name) {
-        throw new Error("Название привычки не может быть пустым");
-      }
-      if ([...name].length > MAX_NAME_LEN) {
-        throw new Error(
-          `Название привычки не может быть длиннее ${MAX_NAME_LEN} символов`,
-        );
-      }
+      validateName(name);
 
       const store = loadStore();
       if (store.habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) {
@@ -208,6 +212,32 @@ async function webInvoke(command, args = {}) {
       saveStore(store);
 
       return boardFromStore(store, resolveAnchor(args.anchor), args.days ?? DEFAULT_DAYS);
+    }
+
+    case "rename_habit": {
+      const anchor = resolveAnchor(args.anchor);
+      const id = Number(args.id);
+      const name = String(args.name ?? "").trim();
+      validateName(name);
+
+      const store = loadStore();
+      const habit = store.habits.find((h) => h.id === id);
+      if (!habit) {
+        throw new Error(`Привычка с id ${id} не найдена`);
+      }
+      if (
+        store.habits.some(
+          (h) =>
+            h.id !== id && h.name.toLowerCase() === name.toLowerCase(),
+        )
+      ) {
+        throw new Error(`Привычка "${name}" уже существует`);
+      }
+
+      habit.name = name;
+      saveStore(store);
+
+      return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
     }
 
     case "delete_habit": {

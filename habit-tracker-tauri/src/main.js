@@ -12,6 +12,7 @@ const state = {
   theme: "light",
   pendingToggles: new Set(),
   generation: 0,
+  editingId: null,
 };
 
 const daysRow = document.querySelector("#days-row");
@@ -140,6 +141,7 @@ function applyBoard(board) {
   state.days = board.days;
   state.habits = board.habits;
   state.pendingToggles.clear();
+  state.editingId = null;
   renderBoard();
 }
 
@@ -192,12 +194,20 @@ function renderBody() {
 
   for (const habit of state.habits) {
     const tr = document.createElement("tr");
+    tr.dataset.habitId = habit.id;
 
     const nameTd = document.createElement("td");
     nameTd.className = "habit-col sticky-col";
     nameTd.innerHTML = `
       <div class="habit-cell">
         <span class="habit-name" title="${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</span>
+        <button
+          class="edit-btn"
+          type="button"
+          data-id="${habit.id}"
+          aria-label="Переименовать привычку ${escapeHtml(habit.name)}"
+          title="Переименовать"
+        >✎</button>
         <button
           class="delete-btn"
           type="button"
@@ -270,7 +280,121 @@ async function onAddHabit(event) {
   }
 }
 
+function startRename(id) {
+  if (isBusy() || state.editingId !== null) return;
+  const habit = state.habits.find((h) => h.id === id);
+  if (!habit) return;
+
+  const row = boardBody.querySelector(`tr[data-habit-id="${id}"]`);
+  const cell = row?.querySelector(".habit-cell");
+  if (!cell) return;
+
+  const nameEl = cell.querySelector(".habit-name");
+  const editBtn = cell.querySelector(".edit-btn");
+  const deleteBtn = cell.querySelector(".delete-btn");
+  if (!nameEl || !editBtn || !deleteBtn) return;
+
+  state.editingId = id;
+  const input = document.createElement("input");
+  input.className = "rename-input";
+  input.type = "text";
+  input.value = habit.name;
+  input.maxLength = 80;
+  input.setAttribute("aria-label", "Новое название привычки");
+  nameEl.replaceWith(input);
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "edit-btn save-rename-btn";
+  saveBtn.type = "button";
+  saveBtn.dataset.id = id;
+  saveBtn.textContent = "✓";
+  saveBtn.setAttribute("aria-label", "Сохранить название");
+  saveBtn.title = "Сохранить";
+  editBtn.replaceWith(saveBtn);
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "delete-btn cancel-rename-btn";
+  cancelBtn.type = "button";
+  cancelBtn.setAttribute("aria-label", "Отменить переименование");
+  cancelBtn.title = "Отмена";
+  cancelBtn.textContent = "×";
+  deleteBtn.replaceWith(cancelBtn);
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveRename(id);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelRename();
+    }
+  });
+  input.focus();
+  input.select();
+  setStatus("");
+}
+
+async function saveRename(id) {
+  if (state.editingId !== id || isBusy()) return;
+  const input = boardBody.querySelector(
+    `tr[data-habit-id="${id}"] .rename-input`,
+  );
+  if (!input) return;
+
+  const name = input.value.trim();
+  if (!name) {
+    setStatus("Введите название привычки.", true);
+    input.focus();
+    return;
+  }
+
+  setBusy(true);
+  setStatus("Сохраняю...");
+  try {
+    const board = await invoke("rename_habit", {
+      id,
+      name,
+      anchor: state.anchor,
+      days: DAYS_PER_PAGE,
+    });
+    state.editingId = null;
+    applyBoard(board);
+    setStatus("");
+  } catch (err) {
+    setStatus(String(err), true);
+  } finally {
+    setBusy(false);
+    if (state.editingId === id) input.focus();
+  }
+}
+
+function cancelRename() {
+  if (state.editingId === null) return;
+  const id = state.editingId;
+  state.editingId = null;
+  renderBody();
+  setStatus("");
+  boardBody.querySelector(`tr[data-habit-id="${id}"] .edit-btn`)?.focus();
+}
+
 async function onBoardClick(event) {
+  const saveBtn = event.target.closest(".save-rename-btn");
+  if (saveBtn) {
+    void saveRename(Number(saveBtn.dataset.id));
+    return;
+  }
+
+  if (event.target.closest(".cancel-rename-btn")) {
+    cancelRename();
+    return;
+  }
+
+  const editBtn = event.target.closest(".edit-btn");
+  if (editBtn) {
+    startRename(Number(editBtn.dataset.id));
+    return;
+  }
+
   const deleteBtn = event.target.closest(".delete-btn");
   if (!deleteBtn || isBusy()) return;
 

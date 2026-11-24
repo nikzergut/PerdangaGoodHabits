@@ -65,6 +65,45 @@ try {
 }
 assert(threw, "Слишком длинное название должно отвергаться");
 
+const renamed = await invoke("rename_habit", {
+  id: added.habits[0].id,
+  name: "Чтение по утрам",
+  anchor: past.anchor,
+  days: 14,
+});
+assert(renamed.habits[0].name === "Чтение по утрам", "Имя не обновлено");
+assert(
+  renamed.anchor === past.anchor,
+  "Переименование не должно сбрасывать навигацию",
+);
+
+const second = await invoke("add_habit", {
+  name: "Бег",
+  anchor: past.anchor,
+  days: 14,
+});
+const secondId = second.habits.find((h) => h.name === "Бег").id;
+
+threw = false;
+try {
+  await invoke("rename_habit", {
+    id: added.habits[0].id,
+    name: "бег",
+    anchor: past.anchor,
+    days: 14,
+  });
+} catch (_err) {
+  threw = true;
+}
+assert(threw, "Дубликат при переименовании должен отвергаться");
+
+const cleaned = await invoke("delete_habit", {
+  id: secondId,
+  anchor: past.anchor,
+  days: 14,
+});
+assert(cleaned.habits.length === 1, "Вторая привычка не удалена");
+
 const toggleArgs = {
   habitId: added.habits[0].id,
   anchor: added.days[0].date,
