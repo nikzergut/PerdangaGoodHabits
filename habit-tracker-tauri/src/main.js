@@ -39,6 +39,7 @@ const rangeNote = document.querySelector("#range-note");
 const datePicker = document.querySelector("#date-picker");
 const calendarBtn = document.querySelector("#calendar-btn");
 const themeToggle = document.querySelector("#theme-toggle");
+const langToggle = document.querySelector("#lang-toggle");
 const habitSearch = document.querySelector("#habit-search");
 const clearSearchBtn = document.querySelector("#clear-search");
 const undoBar = document.querySelector("#undo-bar");
@@ -202,6 +203,15 @@ function initTheme() {
   }
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   applyTheme(prefersDark ? "dark" : "light", false);
+}
+
+function syncLanguageToggle() {
+  if (!langToggle) return;
+  const next = state.settings.language === "en" ? "ru" : "en";
+  langToggle.textContent = next.toUpperCase();
+  const label = t(next === "en" ? "langSwitchToEn" : "langSwitchToRu");
+  langToggle.setAttribute("aria-label", label);
+  langToggle.title = label;
 }
 
 function anchorForDate(dateISO) {
@@ -970,6 +980,28 @@ function syncSettingsForm() {
   settingsWebNote.classList.toggle("hidden", !web);
 }
 
+function refreshLocaleUI() {
+  setLocale(state.settings.language);
+  applyTranslations();
+  syncLanguageToggle();
+  applyTheme(state.theme, false);
+  syncSettingsForm();
+  renderBoard();
+  renderUndoBar();
+  if (historyDialog.open) {
+    if (state.history) renderHistory();
+    else void loadHistory();
+  }
+  if (statsDialog.open) renderStats();
+}
+
+function applyLanguage(language) {
+  const next = language === "en" ? "en" : "ru";
+  if (state.settings.language === next) return;
+  state.settings = saveSettings({ language: next });
+  refreshLocaleUI();
+}
+
 async function saveSettingsFromDialog() {
   const next = saveSettings({
     language: settingLanguage.value === "en" ? "en" : "ru",
@@ -979,14 +1011,8 @@ async function saveSettingsFromDialog() {
       : "standard",
   });
   state.settings = next;
-  setLocale(next.language);
-  applyTranslations();
-  applyTheme(state.theme, false);
-  syncSettingsForm();
+  refreshLocaleUI();
   closeDialog(settingsDialog);
-  renderBoard();
-  if (historyDialog.open) void loadHistory();
-  if (statsDialog.open) renderStats();
   setStatus(t("settingsSaved"));
 
   if (!isWebMode()) {
@@ -1026,6 +1052,7 @@ window.addEventListener("DOMContentLoaded", () => {
     document.querySelector("#mode-badge")?.classList.remove("hidden");
   }
   syncSettingsForm();
+  syncLanguageToggle();
   void applySavedWindowSize();
 
   addForm.addEventListener("submit", onAddHabit);
@@ -1050,6 +1077,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   themeToggle.addEventListener("click", () => {
     applyTheme(state.theme === "dark" ? "light" : "dark");
+  });
+  langToggle.addEventListener("click", () => {
+    applyLanguage(state.settings.language === "en" ? "ru" : "en");
   });
 
   document.querySelector("#history-btn").addEventListener("click", () => {

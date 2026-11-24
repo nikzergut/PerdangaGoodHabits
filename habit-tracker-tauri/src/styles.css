@@ -540,11 +540,17 @@ button {
   color: var(--muted);
 }
 
-.theme-toggle {
+.floating-controls {
   position: fixed;
   left: 20px;
   bottom: 20px;
   z-index: 20;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.floating-btn {
   appearance: none;
   border: 2px solid var(--line);
   background: var(--paper);
@@ -560,18 +566,23 @@ button {
   box-shadow: 4px 4px 0 var(--line);
 }
 
-.theme-toggle:hover {
+.floating-btn:hover {
   background: var(--paper-deep);
 }
 
-.theme-toggle:active {
+.floating-btn:active {
   transform: translate(1px, 1px);
   box-shadow: 3px 3px 0 var(--line);
 }
 
-.theme-toggle:focus-visible {
+.floating-btn:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+.lang-toggle {
+  min-width: 54px;
+  justify-content: center;
 }
 
 .theme-toggle-icon {
@@ -640,9 +651,12 @@ button {
     min-width: 720px;
   }
 
-  .theme-toggle {
+  .floating-controls {
     left: 12px;
     bottom: 12px;
+  }
+
+  .floating-btn {
     padding: 9px 10px;
   }
 }

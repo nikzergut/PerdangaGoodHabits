@@ -127,10 +127,13 @@
         </div>
       </section>
 
-      <button id="theme-toggle" class="theme-toggle" type="button" data-i18n-aria="themeLightAria" aria-label="Тёмная тема" title="Переключить тему" data-no-busy="true">
-        <span class="theme-toggle-icon" aria-hidden="true">◐</span>
-        <span class="theme-toggle-text">Тема</span>
-      </button>
+      <div class="floating-controls" data-i18n-aria="quickControls" aria-label="Быстрые переключатели">
+        <button id="lang-toggle" class="floating-btn lang-toggle" type="button" data-no-busy="true">EN</button>
+        <button id="theme-toggle" class="floating-btn theme-toggle" type="button" data-i18n-aria="themeLightAria" aria-label="Тёмная тема" title="Переключить тему" data-no-busy="true">
+          <span class="theme-toggle-icon" aria-hidden="true">◐</span>
+          <span class="theme-toggle-text">Тема</span>
+        </button>
+      </div>
 
       <dialog id="history-dialog" class="panel-dialog">
         <div class="panel-head">
