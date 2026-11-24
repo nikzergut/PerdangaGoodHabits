@@ -21,8 +21,14 @@ if (!isWebMode()) {
 const empty = await invoke("get_board");
 assert(empty.days.length === 14, "Ожидалось 14 дней в окне");
 
-const added = await invoke("add_habit", { name: "Чтение" });
+const past = await invoke("get_board", { anchor: "2020-01-01" });
+const added = await invoke("add_habit", {
+  name: "Чтение",
+  anchor: past.anchor,
+  days: 14,
+});
 assert(added.habits.length === 1, "Привычка не добавлена");
+assert(added.anchor === past.anchor, "Добавление не должно сбрасывать навигацию");
 
 let threw = false;
 try {

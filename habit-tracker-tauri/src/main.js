@@ -253,7 +253,11 @@ async function onAddHabit(event) {
   setBusy(true);
   setStatus("Сохраняю...");
   try {
-    const board = await invoke("add_habit", { name });
+    const board = await invoke("add_habit", {
+      name,
+      anchor: state.anchor,
+      days: DAYS_PER_PAGE,
+    });
     applyBoard(board);
     habitNameInput.value = "";
     setStatus("");

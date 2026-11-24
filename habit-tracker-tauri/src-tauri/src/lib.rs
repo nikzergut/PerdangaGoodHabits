@@ -380,7 +380,13 @@ fn get_board(
 }
 
 #[tauri::command]
-fn add_habit(state: tauri::State<'_, AppState>, name: String) -> Result<BoardResponse, String> {
+fn add_habit(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    anchor: Option<String>,
+    days: Option<i64>,
+) -> Result<BoardResponse, String> {
+    let anchor_date = resolve_anchor(anchor)?;
     let mut store = state
         .store
         .lock()
@@ -389,8 +395,7 @@ fn add_habit(state: tauri::State<'_, AppState>, name: String) -> Result<BoardRes
     save_store_to_path(&state.path, &next)?;
     *store = next;
 
-    let anchor = today_naive() - Duration::days(DEFAULT_DAYS / 2);
-    board_from_store(&store, anchor, DEFAULT_DAYS)
+    board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
 }
 
 #[tauri::command]
@@ -526,6 +531,17 @@ mod tests {
     fn build_days_rejects_overflowing_window() {
         let anchor = NaiveDate::from_ymd_opt(MAX_YEAR, 12, 25).unwrap();
         assert!(build_days(anchor, DEFAULT_DAYS).is_err());
+    }
+
+    #[test]
+    fn board_from_store_uses_supplied_anchor() {
+        let store = sample_store();
+        let anchor = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+        let board = board_from_store(&store, anchor, 3).unwrap();
+
+        assert_eq!(board.anchor, "2020-01-01");
+        assert_eq!(board.days.len(), 3);
+        assert_eq!(board.days[0].date, "2020-01-01");
     }
 
     fn sample_store() -> Store {

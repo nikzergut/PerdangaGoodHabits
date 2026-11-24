@@ -187,7 +187,7 @@ async function webInvoke(command, args = {}) {
       store.nextId += 1;
       saveStore(store);
 
-      return boardFromStore(store, addDays(todayISO(), -Math.floor(DEFAULT_DAYS / 2)), DEFAULT_DAYS);
+      return boardFromStore(store, resolveAnchor(args.anchor), args.days ?? DEFAULT_DAYS);
     }
 
     case "delete_habit": {
