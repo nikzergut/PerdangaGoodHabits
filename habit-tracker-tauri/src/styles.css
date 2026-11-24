@@ -772,7 +772,7 @@ button {
 
 .panel-dialog {
   width: min(920px, calc(100vw - 32px));
-  max-height: min(84vh, 760px);
+  max-height: min(90vh, 780px);
   padding: 0;
   border: 3px solid var(--line);
   border-radius: 0;
@@ -809,7 +809,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 20px;
+  padding: 16px 24px;
   border-bottom: 3px solid var(--line);
   background: var(--paper-deep);
 }
@@ -842,7 +842,7 @@ button {
 .panel-summary {
   flex: 0 0 auto;
   margin: 0;
-  padding: 10px 20px;
+  padding: 12px 24px;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--muted);
@@ -852,7 +852,7 @@ button {
 .panel-content {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 20px;
+  padding: 24px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -874,7 +874,11 @@ button {
 }
 
 .panel-content .status {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
+}
+
+.panel-content .status:empty {
+  display: none;
 }
 
 .history-month + .history-month {
@@ -1071,7 +1075,7 @@ button {
 }
 
 .data-textarea {
-  min-height: 180px;
+  min-height: 112px;
   resize: vertical;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 0.8rem;
@@ -1101,10 +1105,20 @@ button {
   margin-bottom: 16px;
 }
 
+.panel-content .button-row:last-child {
+  margin-bottom: 0;
+}
+
 .data-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 0;
+}
+
+.data-actions + .panel-section-title {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 2px solid var(--soft-line);
 }
 
 .control-btn--wide {
@@ -1115,7 +1129,7 @@ button {
   display: grid;
   grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
   align-items: center;
-  gap: 14px 18px;
+  gap: 20px 22px;
 }
 
 .settings-fields > .panel-field {
@@ -1160,9 +1174,10 @@ button {
   }
 
   .panel-head,
+  .panel-summary,
   .panel-content {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .stats-overview {
