@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outputDir = join(projectRoot, 'build', 'windows')
 const cliPath = join(projectRoot, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
-const releaseExe = join(projectRoot, 'src-tauri', 'target', 'release', 'PerdangaGoodHabits.exe')
+const releaseExe = join(projectRoot, 'src-tauri', 'target', 'release', 'habit-tracker-tauri.exe')
 
 // Собираем release-билд без/installer-бандла: для MSI/NSIS нужны WiX/NSIS,
 // а отдельная папка должна содержать готовый portable .exe.
