@@ -45,7 +45,7 @@
 | CDP smoke продуктовых функций (debug exe) | добавление, toggle, история, статистика, поиск, undo, экспорт, переключение ru/en — все проверки пройдены |
 | Версия Tauri при сборке | 2.12.7 |
 
-Известный `CVE-2026-42184` (`is_local_url()`, origin confusion на Windows/Android) затрагивал `<= 2.11.1`, поэтому текущая версия 2.12.7 уже вне зоны поражения. Тем не менее в 2026 году публиковались и другие advisory Tauri, поэтому стоит добавить `cargo audit` в CI и следить за обновлениями.
+Известный `CVE-2026-42184` (`is_local_url()`, origin confusion на Windows/Android) затрагивал `<= 2.11.1`, поэтому текущая версия 2.12.7 уже вне зоны поражения. Тем не менее в 2026 году публиковались и другие advisory Tauri: в CI добавлен `npm audit --omit=dev`, а `cargo audit` пока не подключён. Стоит следить за обновлениями Tauri.
 
 ---
 
@@ -172,13 +172,13 @@
 
 ### Инженерия
 
-- `.gitignore` — сейчас в проекте presence `node_modules/` и `target/`; при `git init` они попадут в репозиторий.
-- Юнит-тесты Rust: `parse_date`, `build_days`, round-trip `Store`, атомарная запись, валидация команд.
-- Тесты frontend/UI.
-- CI: `fmt`, `clippy -D warnings`, `test`, `tauri build`, `cargo audit`.
-- Логирование и понятные пользовательские сообщения об ошибках.
-- Атомарное хранилище + backup + миграции схемы.
-- Single-instance lock.
+- **Статус: сделано.** `.gitignore` на корне и в `habit-tracker-tauri/`; `node_modules/`, `target/` и build-артефакты не попадают в репозиторий.
+- **Статус: сделано.** Юнит-тесты Rust: `parse_date`, `build_days`, round-trip `Store`, атомарная запись, валидация команд, история, импорт, undo — 27 тестов.
+- **Статус: сделано.** Тесты frontend/UI: `npm run test:web` для общего адаптера и CDP smoke-проверки десктопного UI (диалоги, поиск, undo, локализация).
+- **Статус: сделано.** CI: `.github/workflows/ci.yml` запускает `fmt`, `clippy -D warnings`, `cargo test`, `npm run test:web`, `npm audit --omit=dev` и portable Windows-сборку. `cargo audit` не подключён — требует установки дополнительного инструмента.
+- **Статус: сделано.** Логирование и понятные пользовательские сообщения об ошибках: `detailed_error()` убирает абсолютные пути из UI.
+- **Статус: сделано.** Атомарное хранилище + backup + миграции схемы.
+- **Статус: сделано.** Single-instance lock через `tauri-plugin-single-instance`.
 
 ### Функциональность продукта
 

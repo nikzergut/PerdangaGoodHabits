@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web adapter and frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: habit-tracker-tauri
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: habit-tracker-tauri/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check
+        run: |
+          node --check src/api.js
+          node --check src/i18n.js
+          node --check src/settings.js
+          node --check src/main.js
+
+      - name: Web adapter tests
+        run: npm run test:web
+
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev
+
+  desktop:
+    name: Rust checks and Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: habit-tracker-tauri
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: habit-tracker-tauri/package-lock.json
+
+      - name: Install Rust components
+        working-directory: habit-tracker-tauri/src-tauri
+        run: rustup component add rustfmt clippy
+
+      - name: Format check
+        working-directory: habit-tracker-tauri/src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: habit-tracker-tauri/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Unit tests
+        working-directory: habit-tracker-tauri/src-tauri
+        run: cargo test
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Portable Windows build
+        run: npm run build:win
