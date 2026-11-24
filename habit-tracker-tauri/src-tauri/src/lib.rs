@@ -71,13 +71,22 @@ struct ToggleResponse {
     completed: bool,
 }
 
+fn detailed_error(user_message: &str, detail: impl std::fmt::Display) -> String {
+    eprintln!("{user_message}: {detail}");
+    user_message.to_string()
+}
+
 fn data_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Не удалось определить каталог данных: {e}"))?;
-    fs::create_dir_all(&dir)
-        .map_err(|e| format!("Не удалось создать каталог {}: {e}", dir.display()))?;
+        .map_err(|e| detailed_error("Не удалось определить каталог данных", e))?;
+    fs::create_dir_all(&dir).map_err(|e| {
+        detailed_error(
+            "Не удалось создать каталог данных",
+            format!("{}: {e}", dir.display()),
+        )
+    })?;
     Ok(dir.join(DATA_FILE))
 }
 
@@ -134,19 +143,31 @@ fn normalize_store(mut store: Store) -> Result<Store, String> {
 }
 
 fn read_store_file(path: &PathBuf) -> Result<Store, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Не удалось прочитать {}: {e}", path.display()))?;
+    let content = fs::read_to_string(path).map_err(|e| {
+        detailed_error(
+            "Не удалось прочитать файл данных",
+            format!("{}: {e}", path.display()),
+        )
+    })?;
     if content.trim().is_empty() {
         return Ok(default_store());
     }
-    let store: Store = serde_json::from_str(&content)
-        .map_err(|e| format!("Не удалось разобрать {}: {e}", path.display()))?;
+    let store: Store = serde_json::from_str(&content).map_err(|e| {
+        detailed_error(
+            "Не удалось разобрать файл данных",
+            format!("{}: {e}", path.display()),
+        )
+    })?;
     normalize_store(store)
 }
 
 fn recover_from_temp(path: &PathBuf, tmp: &PathBuf) -> Result<Store, String> {
-    let content = fs::read_to_string(tmp)
-        .map_err(|e| format!("Не удалось прочитать {}: {e}", tmp.display()))?;
+    let content = fs::read_to_string(tmp).map_err(|e| {
+        detailed_error(
+            "Не удалось прочитать временный файл",
+            format!("{}: {e}", tmp.display()),
+        )
+    })?;
     if content.trim().is_empty() {
         return Err("Временный файл пуст".to_string());
     }
@@ -154,14 +175,18 @@ fn recover_from_temp(path: &PathBuf, tmp: &PathBuf) -> Result<Store, String> {
     let store = read_store_file(tmp)?;
     if path.exists() {
         fs::remove_file(path).map_err(|e| {
-            format!(
-                "Не удалось удалить повреждённый файл {}: {e}",
-                path.display()
+            detailed_error(
+                "Не удалось удалить повреждённый файл",
+                format!("{}: {e}", path.display()),
             )
         })?;
     }
-    fs::rename(tmp, path)
-        .map_err(|e| format!("Не удалось восстановить {}: {e}", path.display()))?;
+    fs::rename(tmp, path).map_err(|e| {
+        detailed_error(
+            "Не удалось восстановить данные из временного файла",
+            format!("{}: {e}", path.display()),
+        )
+    })?;
     Ok(store)
 }
 
@@ -210,26 +235,41 @@ fn load_store_from_path(path: &PathBuf) -> Result<Store, String> {
 
 fn save_store_to_path(path: &PathBuf, store: &Store) -> Result<(), String> {
     let content = serde_json::to_string_pretty(store)
-        .map_err(|e| format!("Не удалось сериализовать данные: {e}"))?;
+        .map_err(|e| detailed_error("Не удалось сериализовать данные", e))?;
     let tmp = temp_path(path);
 
-    let mut file = File::create(&tmp)
-        .map_err(|e| format!("Не удалось создать временный файл {}: {e}", tmp.display()))?;
-    file.write_all(content.as_bytes())
-        .map_err(|e| format!("Не удалось записать временный файл {}: {e}", tmp.display()))?;
-    file.sync_all()
-        .map_err(|e| format!("Не удалось синхронизировать {}: {e}", tmp.display()))?;
+    let mut file = File::create(&tmp).map_err(|e| {
+        detailed_error(
+            "Не удалось создать временный файл",
+            format!("{}: {e}", tmp.display()),
+        )
+    })?;
+    file.write_all(content.as_bytes()).map_err(|e| {
+        detailed_error(
+            "Не удалось записать временный файл",
+            format!("{}: {e}", tmp.display()),
+        )
+    })?;
+    file.sync_all().map_err(|e| {
+        detailed_error(
+            "Не удалось синхронизировать временный файл",
+            format!("{}: {e}", tmp.display()),
+        )
+    })?;
     drop(file);
 
     if path.exists() {
-        fs::remove_file(path)
-            .map_err(|e| format!("Не удалось заменить {}: {e}", path.display()))?;
+        fs::remove_file(path).map_err(|e| {
+            detailed_error(
+                "Не удалось заменить файл данных",
+                format!("{}: {e}", path.display()),
+            )
+        })?;
     }
     fs::rename(&tmp, path).map_err(|e| {
-        format!(
-            "Не удалось переименовать {} в {}: {e}",
-            tmp.display(),
-            path.display()
+        detailed_error(
+            "Не удалось сохранить файл данных",
+            format!("{}: {e}", path.display()),
         )
     })
 }
@@ -709,6 +749,21 @@ mod tests {
         assert_eq!(loaded.next_id, store.next_id);
 
         cleanup_test_files(&path);
+    }
+
+    #[test]
+    fn save_error_hides_absolute_path() {
+        let marker = format!(
+            "hidden-dir-{}",
+            TEST_PATH_COUNTER.fetch_add(1, Ordering::SeqCst)
+        );
+        let path = std::env::temp_dir().join(marker).join(DATA_FILE);
+
+        let err = save_store_to_path(&path, &sample_store()).unwrap_err();
+
+        assert_eq!(err, "Не удалось создать временный файл");
+        assert!(!err.contains("hidden-dir"));
+        assert!(!err.contains(std::path::MAIN_SEPARATOR));
     }
 
     #[test]
