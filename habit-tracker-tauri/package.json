@@ -1,0 +1,15 @@
+{
+  "name": "perdangagoodhabits",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "build:win": "node scripts/build-windows.mjs",
+    "dev:web": "node scripts/serve-web.mjs",
+    "test:web": "node scripts/test-web-adapter.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
