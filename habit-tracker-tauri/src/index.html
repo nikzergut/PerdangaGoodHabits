@@ -157,23 +157,27 @@
           <h2 data-i18n="dataTitle">Данные</h2>
           <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
         </div>
-        <p id="data-status" class="status" aria-live="polite"></p>
-        <div class="panel-field">
-          <label for="data-text" data-i18n="dataTextLabel">Данные JSON</label>
-          <textarea id="data-text" class="data-textarea" rows="10" spellcheck="false" data-no-busy="true"></textarea>
-        </div>
-        <div class="button-row">
-          <button id="data-export" class="control-btn" type="button" data-i18n="dataExport">Экспорт</button>
-          <button id="data-copy" class="control-btn" type="button" data-i18n="dataCopy">Копировать</button>
-          <button id="data-download" class="control-btn" type="button" data-i18n="dataDownload">Скачать</button>
-          <button id="data-backup" class="control-btn" type="button" data-i18n="dataBackup">Бэкап</button>
-        </div>
-        <div class="panel-field">
-          <label for="data-file" data-i18n="dataFileLabel">Загрузить файл JSON</label>
-          <input id="data-file" class="data-file" type="file" accept=".json,application/json" data-no-busy="true" />
-        </div>
-        <div class="button-row">
-          <button id="data-import" class="control-btn control-btn--solid" type="button" data-i18n="dataImport">Импорт (заменить данные)</button>
+        <div class="panel-content">
+          <p id="data-status" class="status" aria-live="polite"></p>
+          <h3 class="panel-section-title" data-i18n="dataSectionExport">Экспорт</h3>
+          <div class="panel-field">
+            <label for="data-text" data-i18n="dataTextLabel">Данные JSON</label>
+            <textarea id="data-text" class="data-textarea" rows="10" spellcheck="false" data-no-busy="true"></textarea>
+          </div>
+          <div class="button-row data-actions">
+            <button id="data-export" class="control-btn" type="button" data-i18n="dataExport">Экспорт</button>
+            <button id="data-copy" class="control-btn" type="button" data-i18n="dataCopy">Копировать</button>
+            <button id="data-download" class="control-btn" type="button" data-i18n="dataDownload">Скачать</button>
+            <button id="data-backup" class="control-btn" type="button" data-i18n="dataBackup">Бэкап</button>
+          </div>
+          <h3 class="panel-section-title" data-i18n="dataSectionImport">Импорт</h3>
+          <div class="panel-field">
+            <label for="data-file" data-i18n="dataFileLabel">Загрузить файл JSON</label>
+            <input id="data-file" class="data-file" type="file" accept=".json,application/json" data-no-busy="true" />
+          </div>
+          <div class="button-row">
+            <button id="data-import" class="control-btn control-btn--solid control-btn--wide" type="button" data-i18n="dataImport">Импорт (заменить данные)</button>
+          </div>
         </div>
       </dialog>
 
@@ -182,32 +186,36 @@
           <h2 data-i18n="settingsTitle">Настройки</h2>
           <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
         </div>
-        <div class="panel-field">
-          <label for="setting-language" data-i18n="settingsLanguage">Язык</label>
-          <select id="setting-language" data-no-busy="true">
-            <option value="ru" data-i18n="langRu">Русский</option>
-            <option value="en" data-i18n="langEn">English</option>
-          </select>
-        </div>
-        <div class="panel-field">
-          <label for="setting-week-start" data-i18n="settingsWeekStart">Первый день недели</label>
-          <select id="setting-week-start" data-no-busy="true">
-            <option value="monday" data-i18n="weekMonday">Понедельник</option>
-            <option value="sunday" data-i18n="weekSunday">Воскресенье</option>
-          </select>
-        </div>
-        <div class="panel-field" id="setting-window-field">
-          <label for="setting-window-size" data-i18n="settingsWindowSize">Размер окна</label>
-          <select id="setting-window-size" data-no-busy="true">
-            <option value="compact" data-i18n="sizeCompact">Компактный</option>
-            <option value="standard" data-i18n="sizeStandard">Стандартный</option>
-            <option value="wide" data-i18n="sizeWide">Широкий</option>
-          </select>
-          <p id="settings-web-note" class="panel-note hidden" data-i18n="sizeWebNote">Размер окна доступен только в десктопной версии.</p>
-        </div>
-        <div class="button-row">
-          <button id="settings-save" class="control-btn control-btn--solid" type="button" data-i18n="settingsSave">Сохранить</button>
-          <button class="control-btn" type="button" data-close-dialog data-no-busy="true" data-i18n="settingsCancel">Отмена</button>
+        <div class="panel-content">
+          <div class="settings-fields">
+            <div class="panel-field">
+              <label for="setting-language" data-i18n="settingsLanguage">Язык</label>
+              <select id="setting-language" data-no-busy="true">
+                <option value="ru" data-i18n="langRu">Русский</option>
+                <option value="en" data-i18n="langEn">English</option>
+              </select>
+            </div>
+            <div class="panel-field">
+              <label for="setting-week-start" data-i18n="settingsWeekStart">Первый день недели</label>
+              <select id="setting-week-start" data-no-busy="true">
+                <option value="monday" data-i18n="weekMonday">Понедельник</option>
+                <option value="sunday" data-i18n="weekSunday">Воскресенье</option>
+              </select>
+            </div>
+            <div class="panel-field" id="setting-window-field">
+              <label for="setting-window-size" data-i18n="settingsWindowSize">Размер окна</label>
+              <select id="setting-window-size" data-no-busy="true">
+                <option value="compact" data-i18n="sizeCompact">Компактный</option>
+                <option value="standard" data-i18n="sizeStandard">Стандартный</option>
+                <option value="wide" data-i18n="sizeWide">Широкий</option>
+              </select>
+              <p id="settings-web-note" class="panel-note hidden" data-i18n="sizeWebNote">Размер окна доступен только в десктопной версии.</p>
+            </div>
+          </div>
+          <div class="button-row settings-actions">
+            <button id="settings-save" class="control-btn control-btn--solid" type="button" data-i18n="settingsSave">Сохранить</button>
+            <button class="control-btn" type="button" data-close-dialog data-no-busy="true" data-i18n="settingsCancel">Отмена</button>
+          </div>
         </div>
       </dialog>
     </div>

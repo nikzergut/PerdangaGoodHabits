@@ -13,6 +13,10 @@ habit-tracker-tauri/src-tauri/target/
 habit-tracker-tauri/src-tauri/gen/schemas/
 habit-tracker-tauri/build/
 
+# Local project notes
+REVIEW.md
+AGENTS.md
+
 # Editors and tooling
 .vscode/
 .idea/

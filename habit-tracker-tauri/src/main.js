@@ -815,6 +815,7 @@ function computeStats(history) {
     perHabit,
     bestDays,
     bestWeekday,
+    currentStreak: Math.max(0, ...perHabit.map((h) => h.current)),
     bestStreak: Math.max(0, ...perHabit.map((h) => h.best)),
     periodStart,
     periodEnd: today,
@@ -829,9 +830,9 @@ function renderStats() {
   }
 
   const stats = computeStats(history);
-  const cards = [
-    [t("statsOverall"), `${stats.percent}%`],
+  const metrics = [
     [t("statsTotal"), String(stats.total)],
+    [t("statsCurrentStreak"), t("statsDaysWord", { count: stats.currentStreak })],
     [t("statsBestStreak"), t("statsDaysWord", { count: stats.bestStreak })],
     [
       t("statsBestWeekday"),
@@ -840,12 +841,12 @@ function renderStats() {
         : "—",
     ],
   ];
-  const cardHtml = cards
+  const metricHtml = metrics
     .map(
       ([label, value]) => `
-        <div class="stat-card">
-          <p class="stat-card-label">${escapeHtml(label)}</p>
-          <p class="stat-card-value">${escapeHtml(value)}</p>
+        <div class="stats-metric">
+          <p class="stats-metric-label">${escapeHtml(label)}</p>
+          <span class="stats-metric-value">${escapeHtml(value)}</span>
         </div>
       `,
     )
@@ -872,22 +873,30 @@ function renderStats() {
     : "—";
 
   statsContent.innerHTML = `
-    <div class="stat-cards">${cardHtml}</div>
-    <p class="panel-note">${escapeHtml(t("statsPeriod"))}: ${escapeHtml(formatDateLong(stats.periodStart))} — ${escapeHtml(formatDateLong(stats.periodEnd))} (${stats.dayCount})</p>
+    <div class="stats-overview">
+      <div class="stats-hero">
+        <p class="stats-hero-label">${escapeHtml(t("statsOverall"))}</p>
+        <p class="stats-hero-value">${stats.percent}%</p>
+        <p class="stats-hero-note">${escapeHtml(t("statsPeriod"))}: ${escapeHtml(formatDateLong(stats.periodStart))} — ${escapeHtml(formatDateLong(stats.periodEnd))} · ${stats.dayCount}</p>
+      </div>
+      <div class="stats-metrics">${metricHtml}</div>
+    </div>
     <h3 class="panel-section-title">${escapeHtml(t("statsPerHabit"))}</h3>
-    <table class="history-table">
-      <thead>
-        <tr>
-          <th scope="col">${escapeHtml(t("statsHabit"))}</th>
-          <th scope="col">${escapeHtml(t("statsCompleted"))}</th>
-          <th scope="col">${escapeHtml(t("statsPercent"))}</th>
-          <th scope="col">${escapeHtml(t("statsCurrentStreak"))}</th>
-          <th scope="col">${escapeHtml(t("statsBestStreak"))}</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p class="panel-note">${escapeHtml(t("statsBestDay"))}: ${escapeHtml(bestDays)}</p>
+    <div class="panel-table-wrap">
+      <table class="history-table stats-table">
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtml(t("statsHabit"))}</th>
+            <th scope="col">${escapeHtml(t("statsCompleted"))}</th>
+            <th scope="col">${escapeHtml(t("statsPercent"))}</th>
+            <th scope="col">${escapeHtml(t("statsCurrentStreak"))}</th>
+            <th scope="col">${escapeHtml(t("statsBestStreak"))}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="stats-footer">${escapeHtml(t("statsBestDay"))}: ${escapeHtml(bestDays)}</p>
   `;
 }
 
