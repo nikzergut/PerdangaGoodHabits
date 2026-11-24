@@ -30,7 +30,14 @@
             <button id="today-range" class="control-btn control-btn--solid" type="button">Сегодня</button>
             <button id="next-range" class="control-btn" type="button">Вперёд</button>
             <div class="calendar-picker">
-              <button id="calendar-btn" class="control-btn control-btn--icon" type="button" aria-label="Открыть календарь" title="Выбрать дату">
+              <button
+                id="calendar-btn"
+                class="control-btn control-btn--icon"
+                type="button"
+                aria-label="Открыть календарь"
+                aria-controls="date-picker"
+                title="Выбрать дату"
+              >
                 <svg class="calendar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <rect x="3" y="5" width="18" height="16" rx="0"></rect>
                   <path d="M8 3v4M16 3v4M3 9h18"></path>
@@ -42,6 +49,7 @@
                 type="date"
                 min="1900-01-01"
                 max="2100-12-31"
+                tabindex="-1"
                 aria-label="Выбрать дату"
               />
             </div>

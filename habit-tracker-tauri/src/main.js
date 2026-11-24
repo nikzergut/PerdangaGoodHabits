@@ -22,6 +22,7 @@ const addForm = document.querySelector("#add-form");
 const habitNameInput = document.querySelector("#habit-name");
 const rangeNote = document.querySelector("#range-note");
 const datePicker = document.querySelector("#date-picker");
+const calendarBtn = document.querySelector("#calendar-btn");
 const themeToggle = document.querySelector("#theme-toggle");
 
 function todayISO() {
@@ -345,6 +346,19 @@ function shiftRange(days) {
   loadBoard(addDays(base, days));
 }
 
+function openDatePicker() {
+  if (isBusy()) return;
+  try {
+    if (typeof datePicker.showPicker === "function") {
+      datePicker.showPicker();
+      return;
+    }
+  } catch (_err) {
+    // Показываем фокус на обёртке и передаём управление самому input.
+  }
+  datePicker.focus();
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   initTheme();
   if (isWebMode()) {
@@ -360,6 +374,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (isBusy()) return;
     loadBoard(defaultAnchor());
   });
+  calendarBtn.addEventListener("click", openDatePicker);
   datePicker.addEventListener("change", (event) => {
     const value = event.target.value;
     if (!value || isBusy()) return;
