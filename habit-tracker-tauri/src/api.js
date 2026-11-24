@@ -5,6 +5,7 @@ const DEFAULT_DAYS = 14;
 const MAX_DAYS = 60;
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
+const MAX_NAME_LEN = 80;
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
@@ -84,13 +85,25 @@ function normalizeStore(raw) {
     );
   }
 
-  const habits = Array.isArray(raw?.habits)
+  const used = new Set();
+  let candidate = Number.isInteger(raw?.nextId) ? raw.nextId : 1;
+  if (candidate < 1) candidate = 1;
+
+  const habits = (Array.isArray(raw?.habits)
     ? raw.habits.map(normalizeHabit).filter(Boolean)
-    : [];
-  const maxId = habits.reduce((max, habit) => Math.max(max, habit.id), 0);
-  let nextId = Number.isInteger(raw?.nextId) ? raw.nextId : 1;
-  if (nextId <= maxId) nextId = maxId + 1;
-  if (nextId < 1) nextId = 1;
+    : []
+  ).map((habit) => {
+    if (habit.id < 1 || used.has(habit.id)) {
+      while (used.has(candidate)) candidate += 1;
+      habit.id = candidate;
+      candidate += 1;
+    }
+    used.add(habit.id);
+    return habit;
+  });
+
+  const maxId = used.size ? Math.max(...used) : 0;
+  const nextId = Math.max(candidate, maxId + 1, 1);
 
   return {
     version: SCHEMA_VERSION,
@@ -172,6 +185,11 @@ async function webInvoke(command, args = {}) {
       if (!name) {
         throw new Error("Название привычки не может быть пустым");
       }
+      if ([...name].length > MAX_NAME_LEN) {
+        throw new Error(
+          `Название привычки не может быть длиннее ${MAX_NAME_LEN} символов`,
+        );
+      }
 
       const store = loadStore();
       if (store.habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) {
@@ -206,6 +224,14 @@ async function webInvoke(command, args = {}) {
 
     case "toggle_day": {
       const date = parseDate(String(args.date ?? "").trim());
+      const anchor = resolveAnchor(args.anchor);
+      const visible = new Set(
+        buildDays(anchor, args.days ?? DEFAULT_DAYS).map((day) => day.date),
+      );
+      if (!visible.has(date)) {
+        throw new Error(`Дата вне текущего окна: ${date}`);
+      }
+
       const id = Number(args.habitId);
       const store = loadStore();
       const habit = store.habits.find((h) => h.id === id);

@@ -323,7 +323,12 @@ async function onBoardChange(event) {
   setStatus("");
 
   try {
-    const result = await invoke("toggle_day", { habitId, date });
+    const result = await invoke("toggle_day", {
+      habitId,
+      date,
+      anchor: state.anchor,
+      days: DAYS_PER_PAGE,
+    });
     if (generation !== state.generation) return;
     if (result.completed !== nextChecked) {
       checkbox.checked = result.completed;

@@ -1,5 +1,6 @@
 use chrono::{Datelike, Duration, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -12,6 +13,7 @@ const DEFAULT_DAYS: i64 = 14;
 const MAX_DAYS: i64 = 60;
 const MIN_YEAR: i32 = 1900;
 const MAX_YEAR: i32 = 2100;
+const MAX_NAME_LEN: usize = 80;
 const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -104,16 +106,29 @@ fn normalize_store(mut store: Store) -> Result<Store, String> {
     }
     store.version = SCHEMA_VERSION;
 
-    if let Some(max_id) = store.habits.iter().map(|h| h.id).max()
-        && store.next_id <= max_id
-    {
-        store.next_id = max_id
-            .checked_add(1)
-            .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?;
+    let mut used = HashSet::new();
+    let mut candidate = store.next_id.max(1);
+    for habit in &mut store.habits {
+        if habit.id == 0 || !used.insert(habit.id) {
+            loop {
+                let id = candidate;
+                candidate = candidate
+                    .checked_add(1)
+                    .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?;
+                if !used.contains(&id) {
+                    habit.id = id;
+                    used.insert(id);
+                    break;
+                }
+            }
+        }
     }
-    if store.next_id == 0 {
-        store.next_id = 1;
-    }
+
+    let max_id = used.iter().copied().max().unwrap_or(0);
+    let next_after_max = max_id
+        .checked_add(1)
+        .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?;
+    store.next_id = candidate.max(next_after_max).max(1);
 
     Ok(store)
 }
@@ -224,6 +239,11 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
     if name.is_empty() {
         return Err("Название привычки не может быть пустым".into());
     }
+    if name.chars().count() > MAX_NAME_LEN {
+        return Err(format!(
+            "Название привычки не может быть длиннее {MAX_NAME_LEN} символов"
+        ));
+    }
     if store
         .habits
         .iter()
@@ -239,7 +259,10 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
         created_at: today_naive().format("%Y-%m-%d").to_string(),
         completions: Vec::new(),
     });
-    next.next_id += 1;
+    next.next_id = next
+        .next_id
+        .checked_add(1)
+        .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?;
     Ok(next)
 }
 
@@ -333,10 +356,19 @@ fn build_days(anchor: NaiveDate, days: i64) -> Result<Vec<DayCell>, String> {
         .collect()
 }
 
+fn ensure_date_in_window(date: NaiveDate, anchor: NaiveDate, days: i64) -> Result<(), String> {
+    let date_str = date.format("%Y-%m-%d").to_string();
+    let visible = build_days(anchor, days)?;
+    if visible.iter().any(|d| d.date == date_str) {
+        Ok(())
+    } else {
+        Err(format!("Дата вне текущего окна: {date_str}"))
+    }
+}
+
 fn board_from_store(store: &Store, anchor: NaiveDate, days: i64) -> Result<BoardResponse, String> {
     let days_vec = build_days(anchor, days)?;
-    let visible: std::collections::HashSet<String> =
-        days_vec.iter().map(|d| d.date.clone()).collect();
+    let visible: HashSet<String> = days_vec.iter().map(|d| d.date.clone()).collect();
     Ok(BoardResponse {
         anchor: anchor.format("%Y-%m-%d").to_string(),
         days: days_vec,
@@ -422,9 +454,13 @@ fn toggle_day(
     state: tauri::State<'_, AppState>,
     habit_id: u32,
     date: String,
+    anchor: Option<String>,
+    days: Option<i64>,
 ) -> Result<ToggleResponse, String> {
     let date = date.trim().to_string();
-    parse_date(&date)?;
+    let parsed = parse_date(&date)?;
+    let anchor_date = resolve_anchor(anchor)?;
+    ensure_date_in_window(parsed, anchor_date, days.unwrap_or(DEFAULT_DAYS))?;
 
     let mut store = state
         .store
@@ -618,6 +654,45 @@ mod tests {
             habits: Vec::new(),
         };
         assert!(normalize_store(future).is_err());
+    }
+
+    #[test]
+    fn add_habit_to_store_rejects_long_name() {
+        let store = sample_store();
+        let long_name = "а".repeat(MAX_NAME_LEN + 1);
+        assert!(add_habit_to_store(&store, &long_name).is_err());
+    }
+
+    #[test]
+    fn normalize_store_reassigns_duplicate_and_zero_ids() {
+        let raw = Store {
+            version: SCHEMA_VERSION,
+            next_id: 2,
+            habits: [1, 1, 0]
+                .into_iter()
+                .map(|id| Habit {
+                    id,
+                    name: format!("Привычка {id}"),
+                    created_at: "2026-11-01".to_string(),
+                    completions: Vec::new(),
+                })
+                .collect(),
+        };
+
+        let normalized = normalize_store(raw).unwrap();
+        let ids: Vec<u32> = normalized.habits.iter().map(|h| h.id).collect();
+        assert_eq!(ids, vec![1, 2, 3]);
+        assert_eq!(normalized.next_id, 4);
+    }
+
+    #[test]
+    fn ensure_date_in_window_rejects_outside_date() {
+        let anchor = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
+        let inside = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
+        let outside = NaiveDate::from_ymd_opt(2026, 11, 30).unwrap();
+
+        assert!(ensure_date_in_window(inside, anchor, 3).is_ok());
+        assert!(ensure_date_in_window(outside, anchor, 3).is_err());
     }
 
     #[test]
