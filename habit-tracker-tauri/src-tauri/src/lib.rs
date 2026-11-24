@@ -492,7 +492,6 @@ pub fn run() {
     }
 
     builder
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let path = data_file(app.handle())?;
             let store = load_store_from_path(&path)?;

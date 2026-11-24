@@ -39,6 +39,7 @@
 | `node --check src/main.js` | 0 ошибок (после исправления пункта №4) |
 | `npm run test:web` | OK, включая anchor, длину имени, дату вне окна и нормализацию id (пункты №6, №8) |
 | Запуск двух копий (debug exe) | вторая копия завершается, остаётся 1 процесс (после исправления пункта №5) |
+| CSP + single-instance smoke (debug exe) | приложение запускается, вторая копия завершается (после раздела «Безопасность») |
 | Версия Tauri при сборке | 2.12.7 |
 
 Известный `CVE-2026-42184` (`is_local_url()`, origin confusion на Windows/Android) затрагивал `<= 2.11.1`, поэтому текущая версия 2.12.7 уже вне зоны поражения. Тем не менее в 2026 году публиковались и другие advisory Tauri, поэтому стоит добавить `cargo audit` в CI и следить за обновлениями.
@@ -143,11 +144,17 @@
 
 ## Безопасность
 
-1. **`csp: null`** в `src-tauri/tauri.conf.json:20-22`. Сейчас XSS был бы опасным из-за `withGlobalTauri: true`: любой injected-скрипт мог бы вызывать все команды. Имена привычек экранируются через `escapeHtml()`, но лучше включить жёсткий CSP, например:
+1. **Статус: исправлено.** **`csp: null`** в `src-tauri/tauri.conf.json:20-22`. Сейчас XSS был бы опасным из-за `withGlobalTauri: true`: любой injected-скрипт мог бы вызывать все команды. Имена привычек экранируются через `escapeHtml()`, но лучше включить жёсткий CSP, например:
    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'`.
-2. **Внешние Google Fonts** в `src/index.html:5-10` — утечка IP/логов и зависимость от сети в десктопном офлайн-приложении. Лучше положить шрифт в `src/assets` или полностью удалить внешний запрос.
+
+   Включён CSP в виде объекта: `default-src 'self'`, `script-src 'self'`, `connect-src ipc: http://ipc.localhost`, `style-src 'self' 'unsafe-inline'`, `font-src 'self'`, `img-src 'self' data:`, `object-src/base-uri/frame-src 'none'`. IPC-разрешение сохранено.
+2. **Статус: исправлено.** **Внешние Google Fonts** в `src/index.html:5-10` — утечка IP/логов и зависимость от сети в десктопном офлайн-приложении. Лучше положить шрифт в `src/assets` или полностью удалить внешний запрос.
+
+   Теги `preconnect` и stylesheet удалены; `--font` теперь использует системный сток `Arial Black / Helvetica Neue / Arial / sans-serif`.
 3. **`withGlobalTauri: true`** в `src-tauri/tauri.conf.json:10` — удобно, но расширяет поверхность атаки. Можно перейти на `@tauri-apps/api` и отключить глобал.
-4. **Неиспользуемый `tauri-plugin-opener`** в `src-tauri/Cargo.toml:25` и разрешение `opener:default` в `src-tauri/capabilities/default.json:8`. Плагин не используется, зато даёт дополнительные права. Удалить.
+4. **Статус: исправлено.** **Неиспользуемый `tauri-plugin-opener`** в `src-tauri/Cargo.toml:25` и разрешение `opener:default` в `src-tauri/capabilities/default.json:8`. Плагин не используется, зато даёт дополнительные права. Удалить.
+
+   Зависимость, `.plugin(tauri_plugin_opener::init())` и разрешение `opener:default` удалены; `Cargo.lock` обновлён.
 5. **Ошибки с абсолютными путями** в сообщениях (`src-tauri/src/lib.rs:68-70`, `83`, `98`) попадают в UI. Не критично, но лучше логировать подробности, а пользователю показывать короткое сообщение.
 6. Нет **code signing**, **updater** и проверки подписи обновлений. Для распространения это обязательно.
 7. `bundle.targets: "all"` в `tauri.conf.json:25-26` заставляет обычный `npm run tauri build` пытаться собрать MSI и NSIS. Без установленных WiX Toolset / NSIS сборка упадёт. Для portable-билда уже добавлен `npm run build:win`; для Windows стоит явно зафиксировать нужный target.
