@@ -37,9 +37,10 @@
 | `cargo fmt --check` | 0 расхождений (после исправления пункта №9) |
 | `cargo test` | 17 тестов, все проходят (после исправления пунктов №1-3, №6, №8) |
 | `node --check src/main.js` | 0 ошибок (после исправления пункта №4) |
-| `npm run test:web` | OK, включая anchor, длину имени, дату вне окна и нормализацию id (пункты №6, №8) |
+| `npm run test:web` | OK, включая anchor, длину имени, дату вне окна, нормализацию id и отсутствие `__TAURI__` (пункты №6, №8, безопасность №3) |
 | Запуск двух копий (debug exe) | вторая копия завершается, остаётся 1 процесс (после исправления пункта №5) |
 | CSP + single-instance smoke (debug exe) | приложение запускается, вторая копия завершается (после раздела «Безопасность») |
+| CDP smoke (debug exe) | `__TAURI__` отсутствует, `__TAURI_INTERNALS__` доступен, IPC `get_board` отрисовывает 14 дней |
 | Версия Tauri при сборке | 2.12.7 |
 
 Известный `CVE-2026-42184` (`is_local_url()`, origin confusion на Windows/Android) затрагивал `<= 2.11.1`, поэтому текущая версия 2.12.7 уже вне зоны поражения. Тем не менее в 2026 году публиковались и другие advisory Tauri, поэтому стоит добавить `cargo audit` в CI и следить за обновлениями.
@@ -151,7 +152,9 @@
 2. **Статус: исправлено.** **Внешние Google Fonts** в `src/index.html:5-10` — утечка IP/логов и зависимость от сети в десктопном офлайн-приложении. Лучше положить шрифт в `src/assets` или полностью удалить внешний запрос.
 
    Теги `preconnect` и stylesheet удалены; `--font` теперь использует системный сток `Arial Black / Helvetica Neue / Arial / sans-serif`.
-3. **`withGlobalTauri: true`** в `src-tauri/tauri.conf.json:10` — удобно, но расширяет поверхность атаки. Можно перейти на `@tauri-apps/api` и отключить глобал.
+3. **Статус: исправлено.** **`withGlobalTauri: true`** в `src-tauri/tauri.conf.json:10` — удобно, но расширяет поверхность атаки. Можно перейти на `@tauri-apps/api` и отключить глобал.
+
+   Добавлена зависимость `@tauri-apps/api`; её `core.js` и `tslib` скопированы в `src/vendor/tauri/` сценарием `npm run sync:tauri-api`, чтобы не вводить bundler и сохранить общий `src/` для десктопа и Pages. `api.js` импортирует `invoke` из локального модуля и определяет Tauri по `window.__TAURI_INTERNALS__`, а не по `__TAURI__`. `withGlobalTauri` выключен.
 4. **Статус: исправлено.** **Неиспользуемый `tauri-plugin-opener`** в `src-tauri/Cargo.toml:25` и разрешение `opener:default` в `src-tauri/capabilities/default.json:8`. Плагин не используется, зато даёт дополнительные права. Удалить.
 
    Зависимость, `.plugin(tauri_plugin_opener::init())` и разрешение `opener:default` удалены; `Cargo.lock` обновлён.

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 const storage = new Map();
 
 globalThis.localStorage = {
@@ -17,6 +19,23 @@ function assert(condition, message) {
 if (!isWebMode()) {
   throw new Error("Должен быть выбран веб-режим");
 }
+
+const apiSource = await readFile(new URL("../src/api.js", import.meta.url), "utf8");
+assert(
+  !apiSource.includes("window.__TAURI__"),
+  "Нельзя использовать глобальный window.__TAURI__",
+);
+
+const config = JSON.parse(
+  await readFile(
+    new URL("../src-tauri/tauri.conf.json", import.meta.url),
+    "utf8",
+  ),
+);
+assert(
+  config.app.withGlobalTauri === false,
+  "withGlobalTauri должен быть отключён",
+);
 
 const empty = await invoke("get_board");
 assert(empty.days.length === 14, "Ожидалось 14 дней в окне");

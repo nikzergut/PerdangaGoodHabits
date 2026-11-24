@@ -7,9 +7,13 @@
     "tauri": "tauri",
     "build:win": "node scripts/build-windows.mjs",
     "dev:web": "node scripts/serve-web.mjs",
-    "test:web": "node scripts/test-web-adapter.mjs"
+    "test:web": "node scripts/test-web-adapter.mjs",
+    "sync:tauri-api": "node scripts/sync-tauri-api.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.5"
   }
 }

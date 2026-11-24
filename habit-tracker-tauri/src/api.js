@@ -1,3 +1,5 @@
+import { invoke as tauriInvoke } from "./vendor/tauri/core.js";
+
 const STORAGE_KEY = "habit-tracker-store";
 const BROKEN_KEY = "habit-tracker-store-broken";
 const SCHEMA_VERSION = 1;
@@ -9,12 +11,12 @@ const MAX_NAME_LEN = 80;
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
-export function isWebMode() {
-  return !Boolean(window.__TAURI__?.core?.invoke);
+function isTauri() {
+  return Boolean(window.__TAURI_INTERNALS__?.invoke);
 }
 
-function isTauri() {
-  return !isWebMode();
+export function isWebMode() {
+  return !isTauri();
 }
 
 function defaultStore() {
@@ -262,7 +264,7 @@ async function webInvoke(command, args = {}) {
 
 export async function invoke(command, args) {
   if (isTauri()) {
-    return window.__TAURI__.core.invoke(command, args);
+    return tauriInvoke(command, args);
   }
   return webInvoke(command, args);
 }
