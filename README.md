@@ -18,6 +18,7 @@ A small, fast habit tracker that runs both as a **desktop app** (Tauri v2 + Rust
   - desktop: `habits.json` in the Tauri app data directory, written via a temporary file and backup
   - web: `localStorage`, with corrupt data moved to a separate key instead of breaking startup
 - Date validation (1900–2100) on both frontend and backend
+- Single desktop instance: launching the app again focuses the running window instead of opening a second copy that could overwrite data
 - The same `src/` folder powers both desktop and web — no duplicated UI code
 
 ## Tech stack
