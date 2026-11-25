@@ -9,7 +9,7 @@ A small, fast habit tracker that runs both as a **desktop app** (Tauri v2 + Rust
 
 ## Features
 
-- Add and delete habits
+- Add and delete habits, each with its own color from a fixed accessible palette
 - 14-day rolling board with previous / next navigation and a **Today** button
 - Click any cell to toggle a completion for that habit and day
 - A wider 60-day window is supported by the backend date logic
@@ -46,8 +46,7 @@ A small, fast habit tracker that runs both as a **desktop app** (Tauri v2 + Rust
 │   ├── package.json
 │   └── README.md
 ├── .github/workflows/deploy-pages.yml
-├── AGENTS.md                 # local development conventions
-└── REVIEW.md                 # code audit and fix progress
+└── AGENTS.md                 # local development conventions
 ```
 
 ## Quick start
@@ -119,4 +118,4 @@ cargo test
 
 ## Notes
 
-`REVIEW.md` tracks an ongoing audit and which findings have already been fixed. Contributions and issue reports are welcome.
+Development notes and the audit log are kept locally and are not part of the repository. Contributions and issue reports are welcome.

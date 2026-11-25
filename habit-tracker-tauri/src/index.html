@@ -19,7 +19,7 @@
         </div>
         <div class="masthead-side">
           <p class="range-note" id="range-note" data-i18n="rangeDefault">14 дней в окне</p>
-          <div class="range-controls" aria-label="Навигация по датам">
+          <div class="range-controls" data-i18n-aria="navAria" aria-label="Навигация по датам">
             <button id="prev-range" class="control-btn" type="button" data-i18n="navPrev">Назад</button>
             <button id="today-range" class="control-btn control-btn--solid" type="button" data-i18n="navToday">Сегодня</button>
             <button id="next-range" class="control-btn" type="button" data-i18n="navNext">Вперёд</button>
@@ -53,7 +53,7 @@
         </div>
       </header>
 
-      <section class="composer" aria-label="Добавить привычку">
+      <section class="composer" data-i18n-aria="composerAria" aria-label="Добавить привычку">
         <form id="add-form" class="composer-form">
           <label class="composer-label" for="habit-name" data-i18n="composerLabel">Новая привычка</label>
           <div class="composer-row">
@@ -68,11 +68,16 @@
             />
             <button type="submit" class="control-btn control-btn--solid control-btn--add" data-i18n="addBtn">Добавить</button>
           </div>
+          <fieldset id="habit-color-picker" class="color-picker">
+            <legend class="color-picker-legend" data-i18n="colorLabel">Цвет</legend>
+            <div id="habit-color-options" class="color-options"></div>
+            <p class="color-hint" data-i18n="colorHint">Цвет можно изменить при редактировании.</p>
+          </fieldset>
         </form>
         <p id="status" class="status" aria-live="polite"></p>
       </section>
 
-      <section class="toolbar" aria-label="Работа с привычками">
+      <section class="toolbar" data-i18n-aria="toolbarAria" aria-label="Работа с привычками">
         <div class="toolbar-group">
           <label class="toolbar-label" for="habit-search" data-i18n="searchLabel">Поиск привычек</label>
           <div class="toolbar-search">
@@ -108,7 +113,7 @@
         <button id="undo-btn" class="control-btn" type="button" data-i18n="undoAction">Отменить</button>
       </div>
 
-      <section class="board-wrap" aria-label="Таблица привычек">
+      <section class="board-wrap" data-i18n-aria="boardAria" aria-label="Таблица привычек">
         <div class="board-scroll">
           <table class="board">
             <thead>
@@ -161,7 +166,15 @@
           <p id="data-status" class="status" aria-live="polite"></p>
           <h3 class="panel-section-title" data-i18n="dataSectionExport">Экспорт</h3>
           <div class="panel-field">
-            <label for="data-text" data-i18n="dataTextLabel">Данные JSON</label>
+            <label for="data-format" data-i18n="dataFormatLabel">Формат</label>
+            <select id="data-format" data-no-busy="true">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+              <option value="md">Markdown</option>
+            </select>
+          </div>
+          <div class="panel-field">
+            <label for="data-text" data-i18n="dataTextLabel">Данные</label>
             <textarea id="data-text" class="data-textarea" rows="5" spellcheck="false" data-no-busy="true"></textarea>
           </div>
           <div class="button-row data-actions">
@@ -171,6 +184,7 @@
             <button id="data-backup" class="control-btn" type="button" data-i18n="dataBackup">Бэкап</button>
           </div>
           <h3 class="panel-section-title" data-i18n="dataSectionImport">Импорт</h3>
+          <p class="panel-note" data-i18n="dataImportNote">Импорт поддерживает только JSON.</p>
           <div class="panel-field">
             <label for="data-file" data-i18n="dataFileLabel">Загрузить файл JSON</label>
             <input id="data-file" class="data-file" type="file" accept=".json,application/json" data-no-busy="true" />

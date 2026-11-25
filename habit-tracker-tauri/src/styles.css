@@ -10,10 +10,18 @@
   --danger: #c83b1d;
   --today: #dde5ff;
   --today-cell: #f0f4ff;
-  --focus: #1f4aff;
+  --focus: var(--ink);
+  --color-clay: #a93618;
+  --color-indigo: #3046b8;
+  --color-moss: #3f6b2f;
+  --color-teal: #0d6f68;
+  --color-plum: #713a86;
+  --color-gold: #7d5a00;
+  --color-slate: #4d5561;
+  --color-rose: #9c2f61;
   --surface: rgba(247, 247, 244, 0.55);
   --surface-soft: rgba(247, 247, 244, 0.4);
-  --placeholder: #7a7a72;
+  --placeholder: #66665e;
   --danger-soft: rgba(200, 59, 29, 0.06);
   --bg-wash: rgba(20, 20, 20, 0.03);
   --radius: 0px;
@@ -33,9 +41,17 @@
   --danger: #ff755d;
   --today: #2a3558;
   --today-cell: #20283f;
-  --focus: #8ea0ff;
+  --focus: var(--ink);
   --surface: rgba(32, 32, 32, 0.72);
   --surface-soft: rgba(32, 32, 32, 0.52);
+  --color-clay: #ff8a6b;
+  --color-indigo: #a9b4ff;
+  --color-moss: #9ccf86;
+  --color-teal: #6fd6c6;
+  --color-plum: #d0a0e8;
+  --color-gold: #e0bd63;
+  --color-slate: #b5c0d1;
+  --color-rose: #ff8fc0;
   --placeholder: #8f8f86;
   --danger-soft: rgba(255, 117, 93, 0.12);
   --bg-wash: rgba(239, 239, 232, 0.04);
@@ -216,6 +232,8 @@ button {
 .control-btn:focus-visible,
 .composer-input:focus-visible,
 .day-check:focus-visible,
+.habit-color-mark:focus-visible,
+.drag-handle:focus-visible,
 .edit-btn:focus-visible,
 .rename-input:focus-visible,
 .delete-btn:focus-visible {
@@ -281,11 +299,80 @@ button {
 }
 
 .composer-input:focus {
-  border-color: var(--accent);
+  border-color: var(--ink);
 }
 
 .control-btn--add {
   min-width: 150px;
+}
+
+.color-picker {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.color-picker-legend {
+  padding: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--line);
+  cursor: pointer;
+}
+
+.color-swatch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-swatch:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.color-swatch-box {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--habit-color);
+  color: var(--paper);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.color-swatch input:checked + .color-swatch-box {
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 6px var(--ink);
+}
+
+.color-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .status {
@@ -405,39 +492,140 @@ button {
 
 .habit-cell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 14px;
   min-height: 62px;
 }
 
+.habit-cell[data-color] {
+  box-shadow: inset 12px 0 0 var(--habit-color);
+}
+
+.habit-name-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.habit-color-mark,
+.color-dot {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--line);
+  background: var(--habit-color);
+  vertical-align: middle;
+}
+
+.habit-color-mark {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.habit-color-mark:hover {
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.habit-cell[data-editing] .habit-color-mark {
+  display: none;
+}
+
+.color-dot {
+  margin-right: 8px;
+}
+
 .habit-name {
+  min-width: 0;
   font-size: 0.98rem;
   font-weight: 600;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
+.color-palette {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.color-swatch-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--line);
+  background: var(--habit-color);
+  color: var(--paper);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.color-swatch-btn:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.color-swatch-btn[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 6px var(--ink);
+}
+
+.habit-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.drag-handle,
 .edit-btn,
 .delete-btn {
   appearance: none;
   border: 2px solid transparent;
   background: transparent;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
   color: var(--muted);
   display: grid;
   place-items: center;
 }
 
+.drag-handle {
+  cursor: grab;
+  font-size: 0.95rem;
+  letter-spacing: -2px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle:hover,
 .edit-btn:hover {
   border-color: var(--line);
   color: var(--ink);
   background: var(--bg-wash);
+}
+
+tbody tr.is-dragging {
+  opacity: 0.45;
+}
+
+tbody tr.drag-over td {
+  box-shadow: inset 0 3px 0 var(--ink);
 }
 
 .rename-input {
@@ -593,6 +781,15 @@ button {
 .hidden {
   display: none !important;
 }
+
+[data-color="clay"] { --habit-color: var(--color-clay); }
+[data-color="indigo"] { --habit-color: var(--color-indigo); }
+[data-color="moss"] { --habit-color: var(--color-moss); }
+[data-color="teal"] { --habit-color: var(--color-teal); }
+[data-color="plum"] { --habit-color: var(--color-plum); }
+[data-color="gold"] { --habit-color: var(--color-gold); }
+[data-color="slate"] { --habit-color: var(--color-slate); }
+[data-color="rose"] { --habit-color: var(--color-rose); }
 
 @media (max-width: 980px) {
   .masthead {
@@ -909,6 +1106,44 @@ button {
   min-width: 620px;
   border-collapse: collapse;
   table-layout: auto;
+}
+
+.heatmap-wrap {
+  overflow-x: auto;
+  border: 2px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.heatmap-table {
+  min-width: max-content;
+  font-size: 0.78rem;
+}
+
+.heatmap-table th,
+.heatmap-table td {
+  padding: 6px 7px;
+  text-align: center;
+}
+
+.heat-habit {
+  text-align: left;
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+.heat-col {
+  min-width: 28px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.heat-cell.is-done {
+  color: var(--habit-color);
+  font-size: 0.75rem;
+}
+
+.heat-cell.is-empty {
+  color: var(--soft-line);
 }
 
 .history-table th,

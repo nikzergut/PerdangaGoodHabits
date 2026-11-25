@@ -14,7 +14,8 @@ habit-tracker-tauri/src-tauri/gen/schemas/
 habit-tracker-tauri/build/
 
 # Local project notes
-REVIEW.md
+logs/
+todo/
 AGENTS.md
 
 # Editors and tooling

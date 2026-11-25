@@ -2,12 +2,23 @@ import { invoke as tauriInvoke } from "./vendor/tauri/core.js";
 
 const STORAGE_KEY = "habit-tracker-store";
 const BROKEN_KEY = "habit-tracker-store-broken";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const DEFAULT_DAYS = 14;
 const MAX_DAYS = 60;
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
 const MAX_NAME_LEN = 80;
+
+export const HABIT_COLORS = [
+  "clay",
+  "indigo",
+  "moss",
+  "teal",
+  "plum",
+  "gold",
+  "slate",
+  "rose",
+];
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
@@ -25,6 +36,36 @@ function defaultStore() {
     nextId: 1,
     habits: [],
   };
+}
+
+function isColor(value) {
+  return HABIT_COLORS.includes(value);
+}
+
+function colorForIndex(index) {
+  return HABIT_COLORS[index % HABIT_COLORS.length];
+}
+
+function validateColor(value, allowEmpty = false) {
+  const color = typeof value === "string" ? value.trim() : "";
+  if ((allowEmpty && !color) || isColor(color)) return;
+  throw new Error("Некорректный цвет привычки");
+}
+
+function resolveColorArg(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const color = String(value).trim();
+  if (!color) return fallback;
+  validateColor(color);
+  return color;
+}
+
+function validDateOrNull(value) {
+  try {
+    return parseDate(String(value ?? "").trim());
+  } catch (_) {
+    return null;
+  }
 }
 
 function todayISO() {
@@ -72,10 +113,11 @@ function normalizeHabit(raw) {
   return {
     id: raw.id,
     name: raw.name,
-    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : todayISO(),
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
     completions: Array.isArray(raw.completions)
       ? raw.completions.filter((date) => typeof date === "string")
       : [],
+    color: typeof raw.color === "string" ? raw.color : "",
   };
 }
 
@@ -94,13 +136,22 @@ function normalizeStore(raw) {
   const habits = (Array.isArray(raw?.habits)
     ? raw.habits.map(normalizeHabit).filter(Boolean)
     : []
-  ).map((habit) => {
+  ).map((habit, index) => {
     if (habit.id < 1 || used.has(habit.id)) {
       while (used.has(candidate)) candidate += 1;
       habit.id = candidate;
       candidate += 1;
     }
     used.add(habit.id);
+
+    const color = String(habit.color).trim();
+    habit.color = isColor(color) ? color : colorForIndex(index);
+    habit.createdAt = validDateOrNull(habit.createdAt) || todayISO();
+    habit.completions = [...new Set(
+      habit.completions
+        .map((date) => String(date).trim())
+        .filter((date) => validDateOrNull(date)),
+    )].sort();
     return habit;
   });
 
@@ -171,6 +222,7 @@ function boardFromStore(store, anchor, days) {
       id: habit.id,
       name: habit.name,
       createdAt: habit.createdAt,
+      color: isColor(habit.color) ? habit.color : HABIT_COLORS[0],
       completions: habit.completions.filter((date) => visible.has(date)),
     })),
   };
@@ -182,9 +234,9 @@ function historyFromStore(store) {
       id: habit.id,
       name: habit.name,
       createdAt: habit.createdAt,
+      color: isColor(habit.color) ? habit.color : HABIT_COLORS[0],
       completions: [...new Set(habit.completions)].sort(),
-    }))
-    .sort((a, b) => a.id - b.id);
+    }));
   const allDates = [...new Set(habits.flatMap((h) => h.completions))].sort();
 
   return {
@@ -200,6 +252,7 @@ function validateStoreData(store) {
   for (const habit of store.habits) {
     const name = String(habit.name ?? "").trim();
     validateName(name);
+    validateColor(habit.color, true);
     const lowered = name.toLowerCase();
     if (names.has(lowered)) {
       throw new Error(`Привычка "${name}" уже существует`);
@@ -208,6 +261,36 @@ function validateStoreData(store) {
     parseDate(String(habit.createdAt ?? "").trim());
     for (const date of habit.completions) {
       parseDate(String(date).trim());
+    }
+  }
+}
+
+function validateImportShape(raw) {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    (raw.habits !== undefined && !Array.isArray(raw.habits))
+  ) {
+    throw new Error("Не удалось разобрать импортируемые данные");
+  }
+  const habits = raw.habits ?? [];
+  for (const habit of habits) {
+    if (
+      !habit ||
+      typeof habit !== "object" ||
+      !Number.isInteger(habit.id) ||
+      typeof habit.name !== "string" ||
+      typeof habit.createdAt !== "string" ||
+      !Array.isArray(habit.completions) ||
+      habit.completions.some((date) => typeof date !== "string") ||
+      (habit.color !== undefined && typeof habit.color !== "string")
+    ) {
+      throw new Error("Не удалось разобрать импортируемые данные");
+    }
+    validateColor(habit.color, true);
+    parseDate(habit.createdAt.trim());
+    for (const date of habit.completions) {
+      parseDate(date.trim());
     }
   }
 }
@@ -240,7 +323,9 @@ async function webInvoke(command, args = {}) {
 
     case "import_data": {
       const anchor = resolveAnchor(args.anchor);
-      const parsed = normalizeStore(JSON.parse(String(args.json ?? "").trim()));
+      const raw = JSON.parse(String(args.json ?? "").trim());
+      validateImportShape(raw);
+      const parsed = normalizeStore(raw);
       validateStoreData(parsed);
       const store = normalizeStore(parsed);
       try {
@@ -268,6 +353,7 @@ async function webInvoke(command, args = {}) {
       const raw = args.habit ?? {};
       const name = String(raw.name ?? "").trim();
       validateName(name);
+      validateColor(raw.color, true);
       const completions = [...new Set((raw.completions ?? []).map((d) => parseDate(String(d).trim())))].sort();
 
       if (store.habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) {
@@ -278,13 +364,14 @@ async function webInvoke(command, args = {}) {
       if (!Number.isInteger(id) || id < 1 || store.habits.some((h) => h.id === id)) {
         id = store.nextId;
       }
-      store.habits.push({
+      const index = Number.isInteger(args.index) ? Math.max(0, Math.min(args.index, store.habits.length)) : store.habits.length;
+      store.habits.splice(index, 0, {
         id,
         name,
         createdAt: parseDate(String(raw.createdAt ?? todayISO()).trim()),
         completions,
+        color: resolveColorArg(raw.color, colorForIndex(store.habits.length)),
       });
-      store.habits.sort((a, b) => a.id - b.id);
       store.nextId = Math.max(store.nextId, id + 1);
       saveStore(store);
 
@@ -296,6 +383,7 @@ async function webInvoke(command, args = {}) {
     }
 
     case "add_habit": {
+      const anchor = resolveAnchor(args.anchor);
       const name = String(args.name ?? "").trim();
       validateName(name);
 
@@ -303,17 +391,19 @@ async function webInvoke(command, args = {}) {
       if (store.habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) {
         throw new Error(`Привычка "${name}" уже существует`);
       }
+      const color = resolveColorArg(args.color, colorForIndex(store.habits.length));
 
       store.habits.push({
         id: store.nextId,
         name,
         createdAt: todayISO(),
         completions: [],
+        color,
       });
       store.nextId += 1;
       saveStore(store);
 
-      return boardFromStore(store, resolveAnchor(args.anchor), args.days ?? DEFAULT_DAYS);
+      return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
     }
 
     case "rename_habit": {
@@ -337,6 +427,7 @@ async function webInvoke(command, args = {}) {
       }
 
       habit.name = name;
+      habit.color = resolveColorArg(args.color, habit.color);
       saveStore(store);
 
       return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
@@ -353,6 +444,23 @@ async function webInvoke(command, args = {}) {
       }
       saveStore(store);
 
+      return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
+    }
+
+    case "move_habit": {
+      const anchor = resolveAnchor(args.anchor);
+      const id = Number(args.id);
+      const toIndex = Number(args.toIndex);
+      const store = loadStore();
+      const from = store.habits.findIndex((habit) => habit.id === id);
+      if (from === -1) throw new Error(`Привычка с id ${id} не найдена`);
+      if (!Number.isInteger(toIndex)) {
+        throw new Error("Некорректная позиция привычки");
+      }
+      const [habit] = store.habits.splice(from, 1);
+      const to = Math.max(0, Math.min(toIndex, store.habits.length));
+      store.habits.splice(to, 0, habit);
+      saveStore(store);
       return boardFromStore(store, anchor, args.days ?? DEFAULT_DAYS);
     }
 

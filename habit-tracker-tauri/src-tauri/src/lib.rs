@@ -14,7 +14,10 @@ const MAX_DAYS: i64 = 60;
 const MIN_YEAR: i32 = 1900;
 const MAX_YEAR: i32 = 2100;
 const MAX_NAME_LEN: usize = 80;
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
+const HABIT_COLORS: [&str; 8] = [
+    "clay", "indigo", "moss", "teal", "plum", "gold", "slate", "rose",
+];
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +26,8 @@ struct Habit {
     name: String,
     created_at: String,
     completions: Vec<String>,
+    #[serde(default)]
+    color: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -57,6 +62,7 @@ struct HabitView {
     name: String,
     created_at: String,
     completions: Vec<String>,
+    color: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,6 +88,7 @@ struct HistoryHabit {
     name: String,
     created_at: String,
     completions: Vec<String>,
+    color: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -120,6 +127,37 @@ fn default_store() -> Store {
     }
 }
 
+fn is_valid_color(color: &str) -> bool {
+    HABIT_COLORS.contains(&color)
+}
+
+fn color_for_index(index: usize) -> String {
+    HABIT_COLORS[index % HABIT_COLORS.len()].to_string()
+}
+
+fn validate_color(color: &str, allow_empty: bool) -> Result<(), String> {
+    if (allow_empty && color.trim().is_empty()) || is_valid_color(color.trim()) {
+        Ok(())
+    } else {
+        Err("Некорректный цвет привычки".to_string())
+    }
+}
+
+fn resolve_color_arg(color: Option<&str>, fallback: String) -> Result<String, String> {
+    match color {
+        None => Ok(fallback),
+        Some(raw) => {
+            let color = raw.trim();
+            if color.is_empty() {
+                Ok(fallback)
+            } else {
+                validate_color(color, false)?;
+                Ok(color.to_string())
+            }
+        }
+    }
+}
+
 fn temp_path(path: &Path) -> PathBuf {
     path.with_extension("json.tmp")
 }
@@ -139,7 +177,7 @@ fn normalize_store(mut store: Store) -> Result<Store, String> {
 
     let mut used = HashSet::new();
     let mut candidate = store.next_id.max(1);
-    for habit in &mut store.habits {
+    for (index, habit) in store.habits.iter_mut().enumerate() {
         if habit.id == 0 || !used.insert(habit.id) {
             loop {
                 let id = candidate;
@@ -153,6 +191,27 @@ fn normalize_store(mut store: Store) -> Result<Store, String> {
                 }
             }
         }
+        let color = habit.color.trim();
+        habit.color = if is_valid_color(color) {
+            color.to_string()
+        } else {
+            color_for_index(index)
+        };
+        if parse_date(habit.created_at.trim()).is_err() {
+            habit.created_at = today_naive().format("%Y-%m-%d").to_string();
+        } else {
+            habit.created_at = habit.created_at.trim().to_string();
+        }
+        habit
+            .completions
+            .retain(|date| parse_date(date.trim()).is_ok());
+        habit.completions = habit
+            .completions
+            .iter()
+            .map(|date| date.trim().to_string())
+            .collect();
+        habit.completions.sort();
+        habit.completions.dedup();
     }
 
     let max_id = used.iter().copied().max().unwrap_or(0);
@@ -195,15 +254,7 @@ fn recover_from_temp(path: &PathBuf, tmp: &PathBuf) -> Result<Store, String> {
     }
 
     let store = read_store_file(tmp)?;
-    if path.exists() {
-        fs::remove_file(path).map_err(|e| {
-            detailed_error(
-                "Не удалось удалить повреждённый файл",
-                format!("{}: {e}", path.display()),
-            )
-        })?;
-    }
-    fs::rename(tmp, path).map_err(|e| {
+    save_store_to_path(path, &store).map_err(|e| {
         detailed_error(
             "Не удалось восстановить данные из временного файла",
             format!("{}: {e}", path.display()),
@@ -280,14 +331,6 @@ fn save_store_to_path(path: &PathBuf, store: &Store) -> Result<(), String> {
     })?;
     drop(file);
 
-    if path.exists() {
-        fs::remove_file(path).map_err(|e| {
-            detailed_error(
-                "Не удалось заменить файл данных",
-                format!("{}: {e}", path.display()),
-            )
-        })?;
-    }
     fs::rename(&tmp, path).map_err(|e| {
         detailed_error(
             "Не удалось сохранить файл данных",
@@ -319,10 +362,11 @@ fn ensure_name_available(store: &Store, name: &str, except_id: Option<u32>) -> R
     Ok(())
 }
 
-fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
+fn add_habit_to_store(store: &Store, name: &str, color: Option<&str>) -> Result<Store, String> {
     let name = name.trim();
     validate_name(name)?;
     ensure_name_available(store, name, None)?;
+    let color = resolve_color_arg(color, color_for_index(store.habits.len()))?;
 
     let mut next = store.clone();
     next.habits.push(Habit {
@@ -330,6 +374,7 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
         name: name.to_string(),
         created_at: today_naive().format("%Y-%m-%d").to_string(),
         completions: Vec::new(),
+        color,
     });
     next.next_id = next
         .next_id
@@ -338,13 +383,21 @@ fn add_habit_to_store(store: &Store, name: &str) -> Result<Store, String> {
     Ok(next)
 }
 
-fn rename_habit_in_store(store: &Store, id: u32, name: &str) -> Result<Store, String> {
+fn rename_habit_in_store(
+    store: &Store,
+    id: u32,
+    name: &str,
+    color: Option<&str>,
+) -> Result<Store, String> {
     let name = name.trim();
     validate_name(name)?;
-    if !store.habits.iter().any(|h| h.id == id) {
-        return Err(format!("Привычка с id {id} не найдена"));
-    }
+    let existing = store
+        .habits
+        .iter()
+        .find(|h| h.id == id)
+        .ok_or_else(|| format!("Привычка с id {id} не найдена"))?;
     ensure_name_available(store, name, Some(id))?;
+    let color = resolve_color_arg(color, existing.color.clone())?;
 
     let mut next = store.clone();
     let habit = next
@@ -353,6 +406,7 @@ fn rename_habit_in_store(store: &Store, id: u32, name: &str) -> Result<Store, St
         .find(|h| h.id == id)
         .expect("id checked above");
     habit.name = name.to_string();
+    habit.color = color;
     Ok(next)
 }
 
@@ -363,6 +417,24 @@ fn delete_habit_from_store(store: &Store, id: u32) -> Result<Store, String> {
     if next.habits.len() == before {
         return Err(format!("Привычка с id {id} не найдена"));
     }
+    Ok(next)
+}
+
+fn move_habit_in_store(store: &Store, id: u32, to_index: usize) -> Result<Store, String> {
+    let from = store
+        .habits
+        .iter()
+        .position(|h| h.id == id)
+        .ok_or_else(|| format!("Привычка с id {id} не найдена"))?;
+
+    let mut next = store.clone();
+    let max = next.habits.len().saturating_sub(1);
+    let mut to = to_index.min(max);
+    let habit = next.habits.remove(from);
+    if to > next.habits.len() {
+        to = next.habits.len();
+    }
+    next.habits.insert(to, habit);
     Ok(next)
 }
 
@@ -392,6 +464,7 @@ fn validate_store_data(store: &Store) -> Result<(), String> {
     for habit in &store.habits {
         let name = habit.name.trim();
         validate_name(name)?;
+        validate_color(&habit.color, true)?;
         if !names.insert(name.to_lowercase()) {
             return Err(format!("Привычка \"{name}\" уже существует"));
         }
@@ -404,13 +477,14 @@ fn validate_store_data(store: &Store) -> Result<(), String> {
 }
 
 fn history_from_store(store: &Store) -> HistoryResponse {
-    let mut habits: Vec<HistoryHabit> = store
+    let habits: Vec<HistoryHabit> = store
         .habits
         .iter()
         .map(|h| HistoryHabit {
             id: h.id,
             name: h.name.clone(),
             created_at: h.created_at.clone(),
+            color: h.color.clone(),
             completions: {
                 let mut dates = h.completions.clone();
                 dates.sort();
@@ -419,7 +493,6 @@ fn history_from_store(store: &Store) -> HistoryResponse {
             },
         })
         .collect();
-    habits.sort_by_key(|h| h.id);
 
     let mut all_dates: Vec<String> = habits
         .iter()
@@ -436,9 +509,14 @@ fn history_from_store(store: &Store) -> HistoryResponse {
     }
 }
 
-fn restore_habit_in_store(store: &Store, habit: &Habit) -> Result<Store, String> {
+fn restore_habit_in_store(
+    store: &Store,
+    habit: &Habit,
+    index: Option<usize>,
+) -> Result<Store, String> {
     let name = habit.name.trim();
     validate_name(name)?;
+    validate_color(&habit.color, true)?;
     validate_date(parse_date(habit.created_at.trim())?)?;
     for date in &habit.completions {
         validate_date(parse_date(date.trim())?)?;
@@ -455,19 +533,27 @@ fn restore_habit_in_store(store: &Store, habit: &Habit) -> Result<Store, String>
 
     let mut restored = habit.clone();
     restored.name = name.to_string();
+    let color = restored.color.trim();
+    restored.color = if is_valid_color(color) {
+        color.to_string()
+    } else {
+        color_for_index(next.habits.len())
+    };
     restored.completions.sort();
     restored.completions.dedup();
 
     if next.habits.iter().any(|h| h.id == restored.id) {
         restored.id = next.next_id;
     }
+    let max_id = next.habits.iter().map(|h| h.id).max().unwrap_or(0);
     next.next_id = restored
         .id
         .checked_add(1)
+        .and_then(|v| max_id.checked_add(1).map(|m| v.max(m)))
         .ok_or_else(|| "Диапазон id привычек исчерпан".to_string())?
         .max(next.next_id);
-    next.habits.push(restored);
-    next.habits.sort_by_key(|h| h.id);
+    let insert_at = index.unwrap_or(next.habits.len()).min(next.habits.len());
+    next.habits.insert(insert_at, restored);
     Ok(next)
 }
 
@@ -580,6 +666,7 @@ fn board_from_store(store: &Store, anchor: NaiveDate, days: i64) -> Result<Board
                 id: h.id,
                 name: h.name.clone(),
                 created_at: h.created_at.clone(),
+                color: h.color.clone(),
                 completions: h
                     .completions
                     .iter()
@@ -617,6 +704,7 @@ fn get_board(
 fn add_habit(
     state: tauri::State<'_, AppState>,
     name: String,
+    color: Option<String>,
     anchor: Option<String>,
     days: Option<i64>,
 ) -> Result<BoardResponse, String> {
@@ -625,7 +713,7 @@ fn add_habit(
         .store
         .lock()
         .map_err(|_| "Состояние данных повреждено".to_string())?;
-    let next = add_habit_to_store(&store, &name)?;
+    let next = add_habit_to_store(&store, &name, color.as_deref())?;
     save_store_to_path(&state.path, &next)?;
     *store = next;
 
@@ -637,6 +725,7 @@ fn rename_habit(
     state: tauri::State<'_, AppState>,
     id: u32,
     name: String,
+    color: Option<String>,
     anchor: Option<String>,
     days: Option<i64>,
 ) -> Result<BoardResponse, String> {
@@ -645,7 +734,7 @@ fn rename_habit(
         .store
         .lock()
         .map_err(|_| "Состояние данных повреждено".to_string())?;
-    let next = rename_habit_in_store(&store, id, &name)?;
+    let next = rename_habit_in_store(&store, id, &name, color.as_deref())?;
     save_store_to_path(&state.path, &next)?;
     *store = next;
 
@@ -735,7 +824,7 @@ fn import_data(
         .store
         .lock()
         .map_err(|_| "Состояние данных повреждено".to_string())?;
-    let _ = write_backup(&state.path, &store);
+    write_backup(&state.path, &store)?;
     save_store_to_path(&state.path, &next)?;
     *store = next;
 
@@ -755,6 +844,7 @@ fn backup_data(state: tauri::State<'_, AppState>) -> Result<String, String> {
 fn restore_habit(
     state: tauri::State<'_, AppState>,
     habit: Habit,
+    index: Option<usize>,
     anchor: Option<String>,
     days: Option<i64>,
 ) -> Result<BoardResponse, String> {
@@ -763,10 +853,29 @@ fn restore_habit(
         .store
         .lock()
         .map_err(|_| "Состояние данных повреждено".to_string())?;
-    let next = restore_habit_in_store(&store, &habit)?;
+    let next = restore_habit_in_store(&store, &habit, index)?;
     save_store_to_path(&state.path, &next)?;
     *store = next;
 
+    board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
+}
+
+#[tauri::command]
+fn move_habit(
+    state: tauri::State<'_, AppState>,
+    id: u32,
+    to_index: usize,
+    anchor: Option<String>,
+    days: Option<i64>,
+) -> Result<BoardResponse, String> {
+    let anchor_date = resolve_anchor(anchor)?;
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| "Состояние данных повреждено".to_string())?;
+    let next = move_habit_in_store(&store, id, to_index)?;
+    save_store_to_path(&state.path, &next)?;
+    *store = next;
     board_from_store(&store, anchor_date, days.unwrap_or(DEFAULT_DAYS))
 }
 
@@ -810,6 +919,7 @@ pub fn run() {
             add_habit,
             rename_habit,
             delete_habit,
+            move_habit,
             toggle_day,
             export_data,
             import_data,
@@ -898,6 +1008,7 @@ mod tests {
                 name: "Чтение".to_string(),
                 created_at: "2026-11-01".to_string(),
                 completions: Vec::new(),
+                color: "clay".to_string(),
             }],
         }
     }
@@ -905,13 +1016,14 @@ mod tests {
     #[test]
     fn add_habit_to_store_does_not_mutate_source() {
         let store = sample_store();
-        let next = add_habit_to_store(&store, "Бег").unwrap();
+        let next = add_habit_to_store(&store, "Бег", None).unwrap();
 
         assert_eq!(store.habits.len(), 1);
         assert_eq!(store.next_id, 2);
         assert_eq!(next.habits.len(), 2);
         assert_eq!(next.next_id, 3);
         assert_eq!(next.habits[1].name, "Бег");
+        assert_eq!(next.habits[1].color, "indigo");
     }
 
     #[test]
@@ -919,11 +1031,13 @@ mod tests {
         let mut store = sample_store();
         store.habits[0].completions.push("2026-11-25".to_string());
 
-        let next = rename_habit_in_store(&store, 1, "  Бег  ").unwrap();
+        let next = rename_habit_in_store(&store, 1, "  Бег  ", Some("moss")).unwrap();
 
         assert_eq!(store.habits[0].name, "Чтение");
         assert_eq!(next.habits[0].name, "Бег");
         assert_eq!(next.habits[0].completions, vec!["2026-11-25".to_string()]);
+        assert_eq!(next.habits[0].color, "moss");
+        assert_eq!(store.habits[0].color, "clay");
         assert_eq!(next.next_id, store.next_id);
     }
 
@@ -935,15 +1049,16 @@ mod tests {
             name: "Бег".to_string(),
             created_at: "2026-11-01".to_string(),
             completions: Vec::new(),
+            color: "teal".to_string(),
         });
 
-        assert!(rename_habit_in_store(&store, 1, "бег").is_err());
+        assert!(rename_habit_in_store(&store, 1, "бег", None).is_err());
     }
 
     #[test]
     fn rename_habit_in_store_rejects_missing_id() {
         let store = sample_store();
-        assert!(rename_habit_in_store(&store, 99, "Бег").is_err());
+        assert!(rename_habit_in_store(&store, 99, "Бег", None).is_err());
     }
 
     #[test]
@@ -979,12 +1094,26 @@ mod tests {
                 name: "Чтение".to_string(),
                 created_at: "2026-11-01".to_string(),
                 completions: Vec::new(),
+                color: String::new(),
             }],
         };
 
         let migrated = normalize_store(legacy).unwrap();
         assert_eq!(migrated.version, SCHEMA_VERSION);
         assert_eq!(migrated.next_id, 8);
+        assert_eq!(migrated.habits[0].color, "clay");
+    }
+
+    #[test]
+    fn normalize_store_repairs_invalid_dates() {
+        let raw: Store = serde_json::from_str(
+            r#"{"version":1,"nextId":2,"habits":[{"id":1,"name":"Чтение","createdAt":"bad","completions":["2026-01-01","2026-13-45"]}]}"#,
+        )
+        .unwrap();
+
+        let normalized = normalize_store(raw).unwrap();
+        assert_ne!(normalized.habits[0].created_at, "bad");
+        assert_eq!(normalized.habits[0].completions, vec!["2026-01-01"]);
     }
 
     #[test]
@@ -1001,7 +1130,7 @@ mod tests {
     fn add_habit_to_store_rejects_long_name() {
         let store = sample_store();
         let long_name = "а".repeat(MAX_NAME_LEN + 1);
-        assert!(add_habit_to_store(&store, &long_name).is_err());
+        assert!(add_habit_to_store(&store, &long_name, None).is_err());
     }
 
     #[test]
@@ -1016,6 +1145,7 @@ mod tests {
                     name: format!("Привычка {id}"),
                     created_at: "2026-11-01".to_string(),
                     completions: Vec::new(),
+                    color: String::new(),
                 })
                 .collect(),
         };
@@ -1023,6 +1153,8 @@ mod tests {
         let normalized = normalize_store(raw).unwrap();
         let ids: Vec<u32> = normalized.habits.iter().map(|h| h.id).collect();
         assert_eq!(ids, vec![1, 2, 3]);
+        let colors: Vec<&str> = normalized.habits.iter().map(|h| h.color.as_str()).collect();
+        assert_eq!(colors, vec!["clay", "indigo", "moss"]);
         assert_eq!(normalized.next_id, 4);
     }
 
@@ -1095,6 +1227,23 @@ mod tests {
     }
 
     #[test]
+    fn load_store_from_path_normalizes_recovered_temp_file() {
+        let path = test_path();
+        let tmp = temp_path(&path);
+        let legacy = r#"{"version":1,"nextId":2,"habits":[{"id":1,"name":"Чтение","createdAt":"2026-11-01","completions":[]}]}"#;
+        fs::write(&tmp, legacy).unwrap();
+
+        let store = load_store_from_path(&path).unwrap();
+        assert_eq!(store.habits[0].color, "clay");
+        let on_disk: Store = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(on_disk.version, SCHEMA_VERSION);
+        assert_eq!(on_disk.habits[0].color, "clay");
+        assert!(!tmp.exists());
+
+        cleanup_test_files(&path);
+    }
+
+    #[test]
     fn store_uses_camel_case_and_reads_legacy_next_id() {
         let serialized = serde_json::to_string(&sample_store()).unwrap();
         assert!(serialized.contains("\"nextId\""));
@@ -1140,20 +1289,53 @@ mod tests {
     }
 
     #[test]
-    fn restore_habit_in_store_preserves_history() {
+    fn validate_store_data_rejects_invalid_color() {
         let mut store = sample_store();
-        store.habits.clear();
-        let deleted = Habit {
-            id: 1,
-            name: "Чтение".to_string(),
-            created_at: "2026-11-01".to_string(),
-            completions: vec!["2026-11-02".to_string()],
-        };
+        store.habits[0].color = "neon".to_string();
+        assert!(validate_store_data(&store).is_err());
+    }
 
-        let restored = restore_habit_in_store(&store, &deleted).unwrap();
-        assert_eq!(restored.habits.len(), 1);
+    #[test]
+    fn add_habit_to_store_rejects_invalid_color() {
+        let store = sample_store();
+        assert!(add_habit_to_store(&store, "Бег", Some("neon")).is_err());
+    }
+
+    #[test]
+    fn board_and_history_expose_color() {
+        let store = sample_store();
+        let anchor = NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+        let board = board_from_store(&store, anchor, 1).unwrap();
+        assert_eq!(board.habits[0].color, "clay");
+
+        let history = history_from_store(&store);
+        assert_eq!(history.habits[0].color, "clay");
+    }
+
+    #[test]
+    fn store_serializes_color_field() {
+        let serialized = serde_json::to_string(&sample_store()).unwrap();
+        assert!(serialized.contains("\"color\":\"clay\""));
+    }
+
+    #[test]
+    fn restore_habit_in_store_preserves_history_and_position() {
+        let mut store = sample_store();
+        store.habits.push(Habit {
+            id: 2,
+            name: "Бег".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: Vec::new(),
+            color: "moss".to_string(),
+        });
+        let deleted = store.habits.remove(0);
+
+        let restored = restore_habit_in_store(&store, &deleted, Some(0)).unwrap();
+        assert_eq!(restored.habits[0].id, 1);
         assert_eq!(restored.habits[0].completions, deleted.completions);
-        assert_eq!(restored.next_id, 2);
+        assert_eq!(restored.habits[0].color, "clay");
+        assert_eq!(restored.habits[1].id, 2);
+        assert_eq!(restored.next_id, 3);
     }
 
     #[test]
@@ -1165,12 +1347,46 @@ mod tests {
             name: "Чтение".to_string(),
             created_at: "2026-11-01".to_string(),
             completions: Vec::new(),
+            color: String::new(),
         };
 
-        let restored = restore_habit_in_store(&store, &deleted).unwrap();
+        let restored = restore_habit_in_store(&store, &deleted, Some(1)).unwrap();
         assert_eq!(restored.habits.len(), 2);
         assert_eq!(restored.habits[1].id, 2);
+        assert_eq!(restored.habits[1].color, "indigo");
         assert_eq!(restored.next_id, 3);
+    }
+
+    #[test]
+    fn move_habit_in_store_reorders_by_index() {
+        let mut store = sample_store();
+        store.habits.push(Habit {
+            id: 2,
+            name: "Бег".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: Vec::new(),
+            color: "moss".to_string(),
+        });
+        store.habits.push(Habit {
+            id: 3,
+            name: "Письмо".to_string(),
+            created_at: "2026-11-01".to_string(),
+            completions: Vec::new(),
+            color: "teal".to_string(),
+        });
+
+        let moved = move_habit_in_store(&store, 3, 0).unwrap();
+        assert_eq!(
+            moved.habits.iter().map(|h| h.id).collect::<Vec<_>>(),
+            vec![3, 1, 2]
+        );
+
+        let clamped = move_habit_in_store(&store, 1, 99).unwrap();
+        assert_eq!(
+            clamped.habits.iter().map(|h| h.id).collect::<Vec<_>>(),
+            vec![2, 3, 1]
+        );
+        assert!(move_habit_in_store(&store, 99, 0).is_err());
     }
 
     #[test]

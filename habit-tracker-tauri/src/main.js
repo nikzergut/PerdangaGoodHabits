@@ -1,4 +1,4 @@
-import { invoke, isWebMode } from "./api.js";
+import { HABIT_COLORS, invoke, isWebMode } from "./api.js";
 import {
   applyTranslations,
   getLocale,
@@ -22,6 +22,8 @@ const state = {
   pendingToggles: new Set(),
   generation: 0,
   editingId: null,
+  editingColor: null,
+  colorId: null,
   search: "",
   undo: null,
   undoTimer: null,
@@ -35,6 +37,7 @@ const emptyState = document.querySelector("#empty-state");
 const statusEl = document.querySelector("#status");
 const addForm = document.querySelector("#add-form");
 const habitNameInput = document.querySelector("#habit-name");
+const habitColorOptions = document.querySelector("#habit-color-options");
 const rangeNote = document.querySelector("#range-note");
 const datePicker = document.querySelector("#date-picker");
 const calendarBtn = document.querySelector("#calendar-btn");
@@ -56,6 +59,7 @@ const statsContent = document.querySelector("#stats-content");
 const dataText = document.querySelector("#data-text");
 const dataFile = document.querySelector("#data-file");
 const dataStatus = document.querySelector("#data-status");
+const dataFormat = document.querySelector("#data-format");
 const settingLanguage = document.querySelector("#setting-language");
 const settingWeekStart = document.querySelector("#setting-week-start");
 const settingWindowSize = document.querySelector("#setting-window-size");
@@ -243,6 +247,74 @@ function escapeHtml(str) {
     .replaceAll("'", "&#39;");
 }
 
+function colorKey(habit) {
+  return HABIT_COLORS.includes(habit?.color) ? habit.color : HABIT_COLORS[0];
+}
+
+function nextColorKey() {
+  return HABIT_COLORS[state.habits.length % HABIT_COLORS.length];
+}
+
+function selectedComposerColor() {
+  const checked = habitColorOptions?.querySelector("input:checked");
+  return checked?.value || nextColorKey();
+}
+
+function renderComposerColors(selected = selectedComposerColor()) {
+  if (!habitColorOptions) return;
+  const current = HABIT_COLORS.includes(selected) ? selected : nextColorKey();
+  habitColorOptions.innerHTML = "";
+
+  HABIT_COLORS.forEach((key, index) => {
+    const label = document.createElement("label");
+    label.className = "color-swatch";
+    label.dataset.color = key;
+    label.title = t(`color.${key}`);
+
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "habit-color";
+    input.value = key;
+    input.checked = key === current;
+    input.setAttribute("aria-label", t(`color.${key}`));
+
+    const box = document.createElement("span");
+    box.className = "color-swatch-box";
+    box.setAttribute("aria-hidden", "true");
+    box.textContent = String(index + 1);
+
+    label.append(input, box);
+    habitColorOptions.appendChild(label);
+  });
+}
+
+function syncComposerColorSelection() {
+  if (!habitColorOptions || habitColorOptions.querySelector("input:checked")) return;
+  const target = habitColorOptions.querySelector(`input[value="${nextColorKey()}"]`);
+  if (target) target.checked = true;
+}
+
+function buildColorPalette(selected) {
+  const palette = document.createElement("div");
+  palette.className = "color-palette";
+  palette.setAttribute("role", "group");
+  palette.setAttribute("aria-label", t("editColorAria"));
+
+  HABIT_COLORS.forEach((key) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "color-swatch-btn";
+    button.dataset.color = key;
+    button.textContent = String(HABIT_COLORS.indexOf(key) + 1);
+    button.title = t(`color.${key}`);
+    button.setAttribute("aria-label", t(`color.${key}`));
+    button.setAttribute("aria-pressed", String(key === selected));
+    palette.appendChild(button);
+  });
+
+  return palette;
+}
+
 function clearUndo() {
   if (state.undoTimer !== null) {
     clearTimeout(state.undoTimer);
@@ -261,9 +333,9 @@ function renderUndoBar() {
   }
 }
 
-function showUndo(habit) {
+function showUndo(habit, index) {
   clearUndo();
-  state.undo = { habit };
+  state.undo = { habit, index };
   renderUndoBar();
   state.undoTimer = setTimeout(() => {
     clearUndo();
@@ -277,8 +349,11 @@ function applyBoard(board, options = {}) {
   state.habits = board.habits;
   state.pendingToggles.clear();
   state.editingId = null;
+  state.editingColor = null;
+  state.colorId = null;
   state.history = null;
   if (!options.keepUndo) clearUndo();
+  syncComposerColorSelection();
   renderBoard();
   if (historyDialog.open) void loadHistory();
   if (statsDialog.open) renderStats();
@@ -353,25 +428,49 @@ function renderBody() {
 
     const nameTd = document.createElement("td");
     nameTd.className = "habit-col sticky-col";
+    const editing = state.editingId === habit.id;
+    const index = habits.indexOf(habit);
     nameTd.innerHTML = `
-      <div class="habit-cell">
-        <span class="habit-name" title="${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</span>
-        <button
-          class="edit-btn"
-          type="button"
-          data-id="${habit.id}"
-          aria-label="${escapeHtml(t("renameAria", { name: habit.name }))}"
-          title="${escapeHtml(t("renameTitle"))}"
-        >✎</button>
-        <button
-          class="delete-btn"
-          type="button"
-          data-id="${habit.id}"
-          aria-label="${escapeHtml(t("deleteAria", { name: habit.name }))}"
-          title="${escapeHtml(t("deleteTitle"))}"
-        >×</button>
+      <div class="habit-cell" data-color="${colorKey(habit)}"${editing ? ' data-editing="true"' : ""}>
+        <span class="habit-name-wrap">
+          <button
+            class="habit-color-mark"
+            type="button"
+            data-id="${habit.id}"
+            aria-label="${escapeHtml(t("pickColorAria", { name: habit.name }))}"
+            title="${escapeHtml(t("pickColorAria", { name: habit.name }))}"
+          ></button>
+          <span class="habit-name" title="${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</span>
+        </span>
+        <div class="habit-actions" aria-label="${escapeHtml(t("habitActionsAria", { name: habit.name }))}">
+          <button
+            class="drag-handle"
+            type="button"
+            data-id="${habit.id}"
+            draggable="true"
+            aria-label="${escapeHtml(t("dragAria", { name: habit.name }))}"
+            title="${escapeHtml(t("dragTitle"))}"
+          >⋮⋮</button>
+          <button
+            class="edit-btn"
+            type="button"
+            data-id="${habit.id}"
+            aria-label="${escapeHtml(t("editAria", { name: habit.name }))}"
+            title="${escapeHtml(t("renameTitle"))}"
+          >✎</button>
+          <button
+            class="delete-btn"
+            type="button"
+            data-id="${habit.id}"
+            aria-label="${escapeHtml(t("deleteAria", { name: habit.name }))}"
+            title="${escapeHtml(t("deleteTitle"))}"
+          >×</button>
+        </div>
       </div>
     `;
+    if (!editing && state.colorId === habit.id) {
+      nameTd.querySelector(".habit-cell").appendChild(buildColorPalette(colorKey(habit)));
+    }
     tr.appendChild(nameTd);
 
     const completionSet = new Set(habit.completions);
@@ -412,11 +511,13 @@ async function onAddHabit(event) {
   try {
     const board = await invoke("add_habit", {
       name,
+      color: selectedComposerColor(),
       anchor: state.anchor,
       days: DAYS_PER_PAGE,
     });
     applyBoard(board);
     habitNameInput.value = "";
+    renderComposerColors(nextColorKey());
     setStatus("");
   } catch (err) {
     setStatus(localizeError(err), true);
@@ -441,6 +542,8 @@ function startRename(id) {
   if (!nameEl || !editBtn || !deleteBtn) return;
 
   state.editingId = id;
+  state.editingColor = colorKey(habit);
+  state.colorId = null;
   const input = document.createElement("input");
   input.className = "rename-input";
   input.type = "text";
@@ -465,6 +568,8 @@ function startRename(id) {
   cancelBtn.title = t("cancelRenameTitle");
   cancelBtn.textContent = "×";
   deleteBtn.replaceWith(cancelBtn);
+
+  cell.appendChild(buildColorPalette(state.editingColor));
 
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -498,6 +603,7 @@ async function saveRename(id) {
     const board = await invoke("rename_habit", {
       id,
       name,
+      color: state.editingColor,
       anchor: state.anchor,
       days: DAYS_PER_PAGE,
     });
@@ -512,16 +618,55 @@ async function saveRename(id) {
   }
 }
 
+function closeColorPicker() {
+  if (state.colorId === null) return;
+  const id = state.colorId;
+  state.colorId = null;
+  renderBody();
+  boardBody.querySelector(`.habit-color-mark[data-id="${id}"]`)?.focus();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.colorId !== null && state.editingId === null) {
+    event.preventDefault();
+    closeColorPicker();
+  }
+});
+
+async function applyHabitColor(id, name, color) {
+  setBusy(true);
+  setStatus(t("statusSaving"));
+  try {
+    const board = await invoke("rename_habit", {
+      id,
+      name,
+      color,
+      anchor: state.anchor,
+      days: DAYS_PER_PAGE,
+    });
+    state.colorId = null;
+    applyBoard(board);
+    setStatus("");
+  } catch (err) {
+    setStatus(localizeError(err), true);
+  } finally {
+    setBusy(false);
+    boardBody.querySelector(`.habit-color-mark[data-id="${id}"]`)?.focus();
+  }
+}
+
 function cancelRename() {
   if (state.editingId === null) return;
   const id = state.editingId;
   state.editingId = null;
+  state.editingColor = null;
   renderBody();
   setStatus("");
   boardBody.querySelector(`tr[data-habit-id="${id}"] .edit-btn`)?.focus();
 }
 
 function openDialog(dialog) {
+  if (dialog.open) return;
   dialogOpener = document.activeElement;
   if (typeof dialog.showModal === "function") {
     dialog.showModal();
@@ -539,6 +684,41 @@ function closeDialog(dialog) {
 }
 
 async function onBoardClick(event) {
+  const colorMark = event.target.closest(".habit-color-mark");
+  if (colorMark) {
+    if (isBusy() || state.editingId !== null) return;
+    const id = Number(colorMark.dataset.id);
+    state.colorId = state.colorId === id ? null : id;
+    renderBody();
+    const target = state.colorId === null
+      ? boardBody.querySelector(`.habit-color-mark[data-id="${id}"]`)
+      : boardBody.querySelector(`tr[data-habit-id="${id}"] .color-swatch-btn`);
+    target?.focus();
+    return;
+  }
+
+  const colorBtn = event.target.closest(".color-swatch-btn");
+  if (colorBtn && state.colorId !== null && state.editingId === null) {
+    const id = state.colorId;
+    const habit = state.habits.find((h) => h.id === id);
+    if (!habit || isBusy()) return;
+    const color = colorBtn.dataset.color;
+    if (color === colorKey(habit)) {
+      closeColorPicker();
+    } else {
+      void applyHabitColor(id, habit.name, color);
+    }
+    return;
+  }
+
+  if (colorBtn && state.editingId !== null) {
+    state.editingColor = colorBtn.dataset.color;
+    for (const button of colorBtn.parentElement.querySelectorAll(".color-swatch-btn")) {
+      button.setAttribute("aria-pressed", String(button === colorBtn));
+    }
+    return;
+  }
+
   const saveBtn = event.target.closest(".save-rename-btn");
   if (saveBtn) {
     void saveRename(Number(saveBtn.dataset.id));
@@ -549,6 +729,8 @@ async function onBoardClick(event) {
     cancelRename();
     return;
   }
+
+
 
   const editBtn = event.target.closest(".edit-btn");
   if (editBtn) {
@@ -567,6 +749,7 @@ async function onBoardClick(event) {
   setBusy(true);
   setStatus(t("statusDeleting"));
   try {
+    const index = state.habits.findIndex((h) => h.id === id);
     const history = await invoke("get_history");
     const full = history.habits.find((h) => h.id === id) ?? habit;
     const board = await invoke("delete_habit", {
@@ -575,7 +758,7 @@ async function onBoardClick(event) {
       days: DAYS_PER_PAGE,
     });
     applyBoard(board, { keepUndo: true });
-    showUndo(full);
+    showUndo(full, index);
     setStatus("");
   } catch (err) {
     setStatus(localizeError(err), true);
@@ -586,12 +769,13 @@ async function onBoardClick(event) {
 
 async function onUndoClick() {
   if (!state.undo || isBusy()) return;
-  const habit = state.undo.habit;
+  const { habit, index } = state.undo;
   setBusy(true);
   setStatus(t("statusRestoring"));
   try {
     const board = await invoke("restore_habit", {
       habit,
+      index,
       anchor: state.anchor,
       days: DAYS_PER_PAGE,
     });
@@ -603,6 +787,38 @@ async function onUndoClick() {
   } finally {
     setBusy(false);
   }
+}
+
+let draggedHabitId = null;
+
+function clearDropTarget() {
+  boardBody
+    .querySelectorAll("tr.drag-over")
+    .forEach((row) => row.classList.remove("drag-over"));
+}
+
+async function moveHabit(id, toIndex) {
+  setBusy(true);
+  setStatus("");
+  try {
+    const board = await invoke("move_habit", {
+      id,
+      toIndex,
+      anchor: state.anchor,
+      days: DAYS_PER_PAGE,
+    });
+    applyBoard(board, { keepUndo: true });
+  } catch (err) {
+    setStatus(localizeError(err), true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function liveCheckbox(habitId, date) {
+  return boardBody.querySelector(
+    `.day-check[data-habit-id="${habitId}"][data-date="${date}"]`,
+  );
 }
 
 function updateLocalCompletion(habitId, date, completed) {
@@ -644,12 +860,14 @@ async function onBoardChange(event) {
     });
     if (generation !== state.generation) return;
     if (result.completed !== nextChecked) {
-      checkbox.checked = result.completed;
+      const current = liveCheckbox(habitId, date);
+      if (current) current.checked = result.completed;
       updateLocalCompletion(habitId, date, result.completed);
     }
   } catch (err) {
     if (generation !== state.generation) return;
-    checkbox.checked = previous;
+    const current = liveCheckbox(habitId, date);
+    if (current) current.checked = previous;
     updateLocalCompletion(habitId, date, previous);
     setStatus(localizeError(err), true);
   } finally {
@@ -687,6 +905,15 @@ async function loadHistory() {
   }
 }
 
+function monthDays(month) {
+  const [year, monthNum] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+  return Array.from({ length: last }, (_, i) => {
+    const day = String(i + 1).padStart(2, "0");
+    return `${month}-${day}`;
+  });
+}
+
 function renderHistory() {
   const history = state.history;
   if (!history) return;
@@ -715,34 +942,72 @@ function renderHistory() {
   }
 
   const habits = history.habits;
-  const html = [...months.keys()].sort().reverse().map((month) => {
-    const days = months.get(month);
-    const header = habits
-      .map((h) => `<th scope="col">${escapeHtml(h.name)}</th>`)
-      .join("");
-    const rows = [...days.keys()].sort().reverse().map((date) => {
-      const done = days.get(date);
-      const cells = habits
-        .map((h) =>
-          done.has(h.id)
-            ? `<td class="is-done" aria-label="${escapeHtml(t("statsCompleted"))}">✓</td>`
-            : '<td class="is-empty" aria-hidden="true">—</td>',
+  const html = [...months.keys()]
+    .sort()
+    .reverse()
+    .map((month) => {
+      const days = months.get(month);
+      const allDays = monthDays(month);
+      const header = habits
+        .map(
+          (h) =>
+            `<th scope="col"><span class="color-dot" data-color="${colorKey(h)}" aria-hidden="true"></span>${escapeHtml(h.name)}</th>`,
         )
         .join("");
-      const weekday = formatWeekday(date);
-      return `<tr><th scope="row" class="history-date">${escapeHtml(formatDateLong(date))} · ${escapeHtml(weekday)}</th>${cells}</tr>`;
-    }).join("");
 
-    return `
-      <section class="history-month">
-        <h3>${escapeHtml(formatMonth(month))}</h3>
-        <table class="history-table">
-          <thead><tr><th scope="col" class="history-date">${escapeHtml(t("historyDayColumn"))}</th>${header}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </section>
-    `;
-  }).join("");
+      const rows = [...days.keys()]
+        .sort()
+        .reverse()
+        .map((date) => {
+          const done = days.get(date);
+          const cells = habits
+            .map((h) =>
+              done.has(h.id)
+                ? `<td class="is-done" aria-label="${escapeHtml(t("statsCompleted"))}">✓</td>`
+                : '<td class="is-empty" aria-hidden="true">—</td>',
+            )
+            .join("");
+          const weekday = formatWeekday(date);
+          return `<tr><th scope="row" class="history-date">${escapeHtml(formatDateLong(date))} · ${escapeHtml(weekday)}</th>${cells}</tr>`;
+        })
+        .join("");
+
+      const heatHead = allDays
+        .map((date) => `<th scope="col" class="heat-col">${escapeHtml(date.slice(8, 10))}</th>`)
+        .join("");
+      const heatRows = habits
+        .map((h) => {
+          const set = new Set(h.completions);
+          const cells = allDays
+            .map((date) => {
+              const done = set.has(date);
+              const label = `${h.name}, ${formatDateLong(date)}: ${
+                done ? t("statsCompleted") : "—"
+              }`;
+              return `<td class="heat-cell ${done ? "is-done" : "is-empty"}" data-color="${colorKey(h)}" aria-label="${escapeHtml(label)}">${done ? "■" : ""}</td>`;
+            })
+            .join("");
+          return `<tr><th scope="row" class="heat-habit"><span class="color-dot" data-color="${colorKey(h)}" aria-hidden="true"></span>${escapeHtml(h.name)}</th>${cells}</tr>`;
+        })
+        .join("");
+
+      return `
+        <section class="history-month">
+          <h3>${escapeHtml(formatMonth(month))}</h3>
+          <div class="heatmap-wrap">
+            <table class="history-table heatmap-table">
+              <thead><tr><th scope="col" class="heat-habit">${escapeHtml(t("statsHabit"))}</th>${heatHead}</tr></thead>
+              <tbody>${heatRows}</tbody>
+            </table>
+          </div>
+          <table class="history-table">
+            <thead><tr><th scope="col" class="history-date">${escapeHtml(t("historyDayColumn"))}</th>${header}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </section>
+      `;
+    })
+    .join("");
 
   historyContent.innerHTML = html;
 }
@@ -787,6 +1052,7 @@ function computeStats(history) {
 
   const perHabit = history.habits.map((habit) => ({
     name: habit.name,
+    color: colorKey(habit),
     count: habit.completions.length,
     percent: Math.round((habit.completions.length / dayCount) * 100),
     current: currentStreak(habit.completions),
@@ -856,7 +1122,7 @@ function renderStats() {
     .map(
       (habit) => `
         <tr>
-          <td>${escapeHtml(habit.name)}</td>
+          <td><span class="color-dot" data-color="${habit.color}" aria-hidden="true"></span>${escapeHtml(habit.name)}</td>
           <td>${habit.count}</td>
           <td>${habit.percent}%</td>
           <td>${habit.current}</td>
@@ -900,11 +1166,63 @@ function renderStats() {
   `;
 }
 
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function formatData(store, format) {
+  if (format === "json") return JSON.stringify(store, null, 2);
+  if (format === "csv") {
+    const lines = ["id,name,color,createdAt,completionsCount,completions"];
+    for (const habit of store.habits) {
+      const completions = [...(habit.completions || [])].sort();
+      lines.push(
+        [
+          habit.id,
+          habit.name,
+          habit.color,
+          habit.createdAt,
+          completions.length,
+          completions.join("|"),
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+    return lines.join("\n");
+  }
+
+  const lines = ["# PerdangaGoodHabits", ""];
+  for (const habit of store.habits) {
+    const completions = [...(habit.completions || [])].sort();
+    lines.push(`## ${habit.name}`);
+    lines.push("");
+    lines.push(`- id: ${habit.id}`);
+    lines.push(`- color: ${habit.color}`);
+    lines.push(`- createdAt: ${habit.createdAt}`);
+    lines.push(`- completions: ${completions.length}`);
+    if (completions.length) {
+      for (const date of completions) lines.push(`  - ${date}`);
+    } else {
+      lines.push("  - _none_");
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd() + "\n";
+}
+
+async function buildExportText(format = dataFormat?.value || "json") {
+  const json = await invoke("export_data");
+  if (format === "json") return json;
+  return formatData(JSON.parse(json), format);
+}
+
 async function openDataPanel() {
   setDialogStatus("");
   openDialog(dataDialog);
   try {
-    dataText.value = await invoke("export_data");
+    dataText.value = await buildExportText();
     setDialogStatus(t("dataExported"));
   } catch (err) {
     setDialogStatus(localizeError(err), true);
@@ -927,11 +1245,18 @@ async function copyData() {
 }
 
 function downloadData() {
-  const blob = new Blob([dataText.value], { type: "application/json" });
+  const format = dataFormat?.value || "json";
+  const mime =
+    format === "csv"
+      ? "text/csv;charset=utf-8"
+      : format === "md"
+        ? "text/markdown;charset=utf-8"
+        : "application/json";
+  const blob = new Blob([dataText.value], { type: mime });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = t("dataDownloadName");
+  link.download = t(`dataDownloadName.${format}`);
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -992,9 +1317,13 @@ function syncSettingsForm() {
 function refreshLocaleUI() {
   setLocale(state.settings.language);
   applyTranslations();
+  renderComposerColors();
   syncLanguageToggle();
   applyTheme(state.theme, false);
   syncSettingsForm();
+  state.editingId = null;
+  state.editingColor = null;
+  state.colorId = null;
   renderBoard();
   renderUndoBar();
   if (historyDialog.open) {
@@ -1044,18 +1373,25 @@ async function applySavedWindowSize() {
 
 function handleSearch(event) {
   state.search = event.target.value;
+  state.editingId = null;
+  state.editingColor = null;
+  state.colorId = null;
   renderBody();
 }
 
 function clearSearch() {
   state.search = "";
   habitSearch.value = "";
+  state.editingId = null;
+  state.editingColor = null;
+  state.colorId = null;
   renderBody();
   habitSearch.focus();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
   applyTranslations();
+  renderComposerColors();
   initTheme();
   if (isWebMode()) {
     document.querySelector("#mode-badge")?.classList.remove("hidden");
@@ -1067,6 +1403,53 @@ window.addEventListener("DOMContentLoaded", () => {
   addForm.addEventListener("submit", onAddHabit);
   boardBody.addEventListener("click", onBoardClick);
   boardBody.addEventListener("change", onBoardChange);
+
+  boardBody.addEventListener("dragstart", (event) => {
+    const handle = event.target.closest(".drag-handle");
+    if (!handle || isBusy() || state.editingId !== null) {
+      event.preventDefault();
+      return;
+    }
+    draggedHabitId = Number(handle.dataset.id);
+    const row = handle.closest("tr[data-habit-id]");
+    row?.classList.add("is-dragging");
+    event.dataTransfer?.setData("text/plain", String(draggedHabitId));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  });
+
+  boardBody.addEventListener("dragover", (event) => {
+    if (draggedHabitId === null) return;
+    const row = event.target.closest("tr[data-habit-id]");
+    if (!row) return;
+    event.preventDefault();
+    clearDropTarget();
+    row.classList.add("drag-over");
+  });
+
+  boardBody.addEventListener("drop", (event) => {
+    if (draggedHabitId === null) return;
+    const row = event.target.closest("tr[data-habit-id]");
+    if (!row) return;
+    event.preventDefault();
+    const targetId = Number(row.dataset.habitId);
+    clearDropTarget();
+    const from = state.habits.findIndex((h) => h.id === draggedHabitId);
+    const to = state.habits.findIndex((h) => h.id === targetId);
+    draggedHabitId = null;
+    boardBody
+      .querySelectorAll("tr.is-dragging")
+      .forEach((r) => r.classList.remove("is-dragging"));
+    if (from === -1 || to === -1 || from === to) return;
+    void moveHabit(state.habits[from].id, to);
+  });
+
+  boardBody.addEventListener("dragend", () => {
+    draggedHabitId = null;
+    clearDropTarget();
+    boardBody
+      .querySelectorAll("tr.is-dragging")
+      .forEach((row) => row.classList.remove("is-dragging"));
+  });
   undoBtn.addEventListener("click", onUndoClick);
 
   habitSearch.addEventListener("input", handleSearch);
@@ -1119,6 +1502,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  dataFormat?.addEventListener("change", () => {
+    void openDataPanel();
+  });
   document.querySelector("#data-export").addEventListener("click", () => {
     void openDataPanel();
   });
