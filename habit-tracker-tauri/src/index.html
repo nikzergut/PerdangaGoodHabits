@@ -232,6 +232,20 @@
           </div>
         </div>
       </dialog>
+
+      <dialog id="delete-dialog" class="panel-dialog panel-dialog--confirm">
+        <div class="panel-head">
+          <h2 data-i18n="deleteDialogTitle">Удаление привычки</h2>
+          <button class="panel-close" type="button" data-close-dialog data-no-busy="true" data-i18n-aria="closeAria" data-i18n-title="closeTitle" aria-label="Закрыть" title="Закрыть">×</button>
+        </div>
+        <div class="panel-content panel-content--confirm">
+          <p id="delete-dialog-text" class="confirm-text"></p>
+          <div class="button-row confirm-actions">
+            <button id="delete-cancel" class="control-btn" type="button" data-close-dialog data-no-busy="true" data-i18n="deleteCancel">Отмена</button>
+            <button id="delete-confirm" class="control-btn control-btn--danger" type="button" data-no-busy="true" data-i18n="deleteConfirm">Удалить</button>
+          </div>
+        </div>
+      </dialog>
     </div>
   </body>
 </html>

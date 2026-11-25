@@ -29,6 +29,7 @@ const state = {
   undoTimer: null,
   history: null,
   settings: loadSettings(),
+  pendingDelete: null,
 };
 
 const daysRow = document.querySelector("#days-row");
@@ -53,6 +54,9 @@ const historyDialog = document.querySelector("#history-dialog");
 const statsDialog = document.querySelector("#stats-dialog");
 const dataDialog = document.querySelector("#data-dialog");
 const settingsDialog = document.querySelector("#settings-dialog");
+const deleteDialog = document.querySelector("#delete-dialog");
+const deleteDialogText = document.querySelector("#delete-dialog-text");
+const deleteConfirmBtn = document.querySelector("#delete-confirm");
 const historySummary = document.querySelector("#history-summary");
 const historyContent = document.querySelector("#history-content");
 const statsContent = document.querySelector("#stats-content");
@@ -681,6 +685,9 @@ function closeDialog(dialog) {
   } else {
     dialog.removeAttribute("open");
   }
+  if (dialog?.id === "delete-dialog") {
+    state.pendingDelete = null;
+  }
 }
 
 async function onBoardClick(event) {
@@ -744,7 +751,21 @@ async function onBoardClick(event) {
   const id = Number(deleteBtn.dataset.id);
   const habit = state.habits.find((h) => h.id === id);
   if (!habit) return;
-  if (!window.confirm(t("confirmDelete", { name: habit.name }))) return;
+  state.pendingDelete = { id };
+  deleteDialogText.textContent = t("confirmDelete", { name: habit.name });
+  openDialog(deleteDialog);
+  deleteConfirmBtn?.focus();
+}
+
+async function confirmDeleteHabit() {
+  const pending = state.pendingDelete;
+  if (!pending || isBusy()) return;
+  const id = pending.id;
+  const habit = state.habits.find((h) => h.id === id);
+  if (!habit) {
+    closeDialog(deleteDialog);
+    return;
+  }
 
   setBusy(true);
   setStatus(t("statusDeleting"));
@@ -757,6 +778,7 @@ async function onBoardClick(event) {
       anchor: state.anchor,
       days: DAYS_PER_PAGE,
     });
+    closeDialog(deleteDialog);
     applyBoard(board, { keepUndo: true });
     showUndo(full, index);
     setStatus("");
@@ -1517,6 +1539,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   document.querySelector("#data-import").addEventListener("click", () => {
     void handleImport();
+  });
+  deleteConfirmBtn?.addEventListener("click", () => {
+    void confirmDeleteHabit();
   });
   document.querySelector("#settings-save").addEventListener("click", () => {
     void saveSettingsFromDialog();

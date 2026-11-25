@@ -1000,6 +1000,38 @@ tbody tr.drag-over td {
   background: rgba(20, 20, 20, 0.62);
 }
 
+.panel-dialog--confirm {
+  width: min(560px, calc(100vw - 32px));
+  box-shadow: 12px 12px 0 var(--line);
+}
+
+.panel-content--confirm {
+  padding: 28px 24px 24px;
+}
+
+.confirm-text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+.confirm-actions {
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+
+.control-btn--danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--paper);
+}
+
+.control-btn--danger:hover:not(:disabled) {
+  background: transparent;
+  color: var(--danger);
+}
+
 .panel-head {
   flex: 0 0 auto;
   display: flex;
